@@ -8,6 +8,8 @@ import { DomainError, registerTeam, submitScoreReport } from "@/lib/tournament";
 
 export interface RegisterFormState {
   error?: string;
+  /** Echoed back so a failed submit doesn't wipe the form. */
+  values?: { name: string; members: string; contact: string; joinCode: string };
 }
 
 export interface ScoreFormState {
@@ -24,8 +26,14 @@ export async function registerTeamAction(
   formData: FormData,
 ): Promise<RegisterFormState> {
   const slug = String(formData.get("slug") ?? "");
+  const values = {
+    name: String(formData.get("name") ?? ""),
+    members: String(formData.get("members") ?? ""),
+    contact: String(formData.get("contact") ?? ""),
+    joinCode: String(formData.get("joinCode") ?? ""),
+  };
   const t = await prisma.tournament.findUnique({ where: { slug }, select: { id: true } });
-  if (!t) return { error: "Tournament not found." };
+  if (!t) return { error: "Tournament not found.", values };
 
   const h = await headers();
   const ip = (h.get("x-forwarded-for") ?? "").split(",")[0]?.trim() || h.get("x-real-ip") || null;
@@ -47,7 +55,7 @@ export async function registerTeamAction(
     );
     token = team.token;
   } catch (e) {
-    return { error: errorMessage(e, "Could not register.") };
+    return { error: errorMessage(e, "Could not register."), values };
   }
   revalidatePath(`/t/${slug}`);
   redirect(`/t/${slug}/team/${token}?new=1`);

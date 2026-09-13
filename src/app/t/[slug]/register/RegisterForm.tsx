@@ -9,6 +9,7 @@ const input =
 
 export default function RegisterForm({ slug, needsCode }: { slug: string; needsCode: boolean }) {
   const [state, action, pending] = useActionState(registerTeamAction, initial);
+  const v = state.values;
   return (
     <form
       action={action}
@@ -18,21 +19,21 @@ export default function RegisterForm({ slug, needsCode }: { slug: string; needsC
       <label className="text-sm font-medium" htmlFor="name">
         Team name
       </label>
-      <input id="name" name="name" required minLength={2} maxLength={40} className={input} />
+      <input id="name" name="name" required minLength={2} maxLength={40} defaultValue={v?.name} className={input} />
       <label className="mt-2 text-sm font-medium" htmlFor="members">
         Players <span className="font-normal text-zinc-500">(one per line or comma-separated)</span>
       </label>
-      <textarea id="members" name="members" rows={3} className={input} />
+      <textarea id="members" name="members" rows={3} defaultValue={v?.members} className={input} />
       <label className="mt-2 text-sm font-medium" htmlFor="contact">
         Contact <span className="font-normal text-zinc-500">(phone or handle, optional)</span>
       </label>
-      <input id="contact" name="contact" className={input} />
+      <input id="contact" name="contact" defaultValue={v?.contact} className={input} />
       {needsCode && (
         <>
           <label className="mt-2 text-sm font-medium" htmlFor="joinCode">
             Join code <span className="font-normal text-zinc-500">(shown by the organiser)</span>
           </label>
-          <input id="joinCode" name="joinCode" required autoCapitalize="characters" className={`${input} uppercase tracking-widest`} />
+          <input id="joinCode" name="joinCode" required autoCapitalize="characters" defaultValue={v?.joinCode} className={`${input} uppercase tracking-widest`} />
         </>
       )}
       {state.error && <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>}
