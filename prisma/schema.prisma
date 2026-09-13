@@ -1,0 +1,241 @@
+// Bracketeer — live tournament planner data model.
+//
+// Only admins have accounts (User). Teams register openly and get a private
+// token link. Slot timing state is derived from startedAt/endedAt — there is
+// deliberately no stored "running" flag anywhere.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum TournamentStatus {
+  DRAFT
+  REGISTRATION
+  LOCKED
+  RUNNING
+  FINISHED
+}
+
+enum TeamStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+enum Stage {
+  GROUP
+  R16
+  QUARTER
+  SEMI
+  THIRD
+  FINAL
+}
+
+enum SourceKind {
+  TEAM
+  WINNER
+  LOSER
+  GROUP_RANK
+  WILDCARD
+}
+
+enum MatchStatus {
+  SCHEDULED
+  REPORTED
+  CONFIRMED
+  VOID
+}
+
+/// Admin login.
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  name         String?
+  isAdmin      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
+
+model Tournament {
+  id          String           @id @default(cuid())
+  slug        String           @unique
+  name        String
+  description String?
+  status      TournamentStatus @default(DRAFT)
+  testMode    Boolean          @default(false)
+
+  // Scoring rules (generic numeric scoring)
+  pointsWin   Int     @default(3)
+  pointsDraw  Int     @default(1)
+  pointsLoss  Int     @default(0)
+  allowDraws  Boolean @default(false)
+  scoreLabel  String  @default("Points")
+
+  // Clock
+  startsAt         DateTime
+  gameDurationSec  Int      @default(1200)
+  breakDurationSec Int      @default(300)
+
+  // Venue
+  tableCount  Int      @default(2)
+  tableLabels String[] @default([])
+
+  // Format snapshot (see src/lib/formats.ts)
+  formatId     String?
+  formatConfig Json?
+  drawSeed     Int?
+
+  // Gates
+  joinCodeEnabled Boolean @default(false)
+  joinCode        String?
+  openScoring     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teams    Team[]
+  groups   Group[]
+  slots    Slot[]
+  matches  Match[]
+  audit    AuditLog[]
+  attempts RegistrationAttempt[]
+}
+
+model Team {
+  id           String     @id @default(cuid())
+  tournamentId String
+  name         String
+  members      String[]   @default([])
+  contact      String?
+  status       TeamStatus @default(PENDING)
+  seed         Int?
+  groupId      String?
+  /// Private link credential — crypto.randomBytes, never cuid.
+  token        String     @unique
+  createdAt    DateTime   @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  group      Group?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  matchesAsA Match[] @relation("TeamA")
+  matchesAsB Match[] @relation("TeamB")
+  reports    ScoreReport[]
+
+  @@unique([tournamentId, name])
+}
+
+model Group {
+  id           String @id @default(cuid())
+  tournamentId String
+  name         String
+  order        Int
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teams      Team[]
+  matches    Match[]
+
+  @@unique([tournamentId, order])
+}
+
+/// A round: everything in it runs in parallel across the tables.
+model Slot {
+  id           String @id @default(cuid())
+  tournamentId String
+  index        Int
+  label        String
+  stage        Stage
+
+  startedAt DateTime?
+  endedAt   DateTime?
+
+  durationSecOverride   Int?
+  breakAfterSecOverride Int?
+  plannedStartOverride  DateTime?
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  matches    Match[]
+
+  @@unique([tournamentId, index])
+}
+
+model Match {
+  id           String @id @default(cuid())
+  tournamentId String
+  slotId       String
+  tableNo      Int
+  groupId      String?
+
+  teamAId String?
+  teamBId String?
+
+  sourceAKind    SourceKind @default(TEAM)
+  sourceAMatchId String?
+  sourceAGroupId String?
+  sourceARank    Int?
+  sourceBKind    SourceKind @default(TEAM)
+  sourceBMatchId String?
+  sourceBGroupId String?
+  sourceBRank    Int?
+
+  scoreA Int?
+  scoreB Int?
+  status MatchStatus @default(SCHEDULED)
+
+  confirmedAt   DateTime?
+  confirmedById String?
+  note          String?
+  createdAt     DateTime  @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  slot       Slot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  group      Group?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  teamA      Team?      @relation("TeamA", fields: [teamAId], references: [id], onDelete: SetNull)
+  teamB      Team?      @relation("TeamB", fields: [teamBId], references: [id], onDelete: SetNull)
+  reports    ScoreReport[]
+
+  @@unique([slotId, tableNo])
+}
+
+model ScoreReport {
+  id                String   @id @default(cuid())
+  matchId           String
+  scoreA            Int
+  scoreB            Int
+  reportedBy        String?
+  reportedForTeamId String?
+  createdAt         DateTime @default(now())
+
+  match           Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  reportedForTeam Team? @relation(fields: [reportedForTeamId], references: [id], onDelete: SetNull)
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  tournamentId String
+  actorId      String?
+  action       String
+  detail       Json
+  createdAt    DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([tournamentId, createdAt])
+}
+
+/// Registration throttle: max N per IP per window per tournament.
+model RegistrationAttempt {
+  id           String   @id @default(cuid())
+  tournamentId String
+  ip           String
+  createdAt    DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([tournamentId, ip, createdAt])
+}
