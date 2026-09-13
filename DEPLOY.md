@@ -49,6 +49,11 @@ node scripts/seed.mjs
 
 ## 5. Deploy & check
 
+Vercel enables **Vercel Authentication** (SSO deployment protection) by default on new
+projects in this team, which sends every visitor to a vercel.com login. It must be off
+for a public tournament: Project → Settings → Deployment Protection → Vercel
+Authentication → Disabled (or `PATCH /v9/projects/<id>` with `{"ssoProtection": null}`).
+
 - Deploy. The production alias is `<project>-<team>.vercel.app`; plain `<project>.vercel.app` may be taken by someone else.
 - Sign in at `/signin` → `/admin/new` → create a **test-mode** tournament first and
   rehearse with the Test mode tab before the real event.
