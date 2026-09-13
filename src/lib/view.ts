@@ -1,0 +1,125 @@
+/**
+ * Read model shared by the public dashboard, team page and control room.
+ * One query bundle + derived projection/standings.
+ */
+import { prisma } from "./prisma";
+import { computeStandings, type StandingRow } from "./standings";
+import { formatOf, projectionByIndex } from "./tournament";
+import type { SlotProjection } from "./schedule";
+
+export type TournamentView = NonNullable<Awaited<ReturnType<typeof loadTournamentView>>>;
+export type ViewMatch = TournamentView["matches"][number];
+export type ViewSlot = TournamentView["slots"][number];
+
+export async function loadTournamentView(slug: string, now = new Date()) {
+  const t = await prisma.tournament.findUnique({
+    where: { slug },
+    include: {
+      teams: { orderBy: [{ status: "asc" }, { createdAt: "asc" }] },
+      groups: { orderBy: { order: "asc" } },
+      slots: { orderBy: { index: "asc" } },
+      matches: {
+        include: {
+          teamA: { select: { id: true, name: true } },
+          teamB: { select: { id: true, name: true } },
+          reports: { orderBy: { createdAt: "desc" } },
+        },
+      },
+    },
+  });
+  if (!t) return null;
+
+  const projection = projectionByIndex(t, t.slots, now);
+  const slotById = new Map(t.slots.map((s) => [s.id, s]));
+  const teamName = new Map(t.teams.map((x) => [x.id, x.name]));
+  const groupName = new Map(t.groups.map((g) => [g.id, g.name]));
+
+  const slots = t.slots.map((s) => ({
+    ...s,
+    projection: projection.get(s.index)!,
+    label: s.label,
+  }));
+
+  const matches = t.matches
+    .map((m) => {
+      const slot = slotById.get(m.slotId)!;
+      return {
+        ...m,
+        slotIndex: slot.index,
+        slotLabel: slot.label,
+        stage: slot.stage,
+        projection: projection.get(slot.index)!,
+        groupName: m.groupId ? groupName.get(m.groupId) ?? null : null,
+        labelA: describeSide(m.sourceAKind, m.teamA?.name, m.sourceAGroupId, m.sourceARank, groupName),
+        labelB: describeSide(m.sourceBKind, m.teamB?.name, m.sourceBGroupId, m.sourceBRank, groupName),
+      };
+    })
+    .sort((a, b) => a.slotIndex - b.slotIndex || a.tableNo - b.tableNo);
+
+  const rules = { pointsWin: t.pointsWin, pointsDraw: t.pointsDraw, pointsLoss: t.pointsLoss };
+  const standings = new Map<string, StandingRow[]>();
+  for (const g of t.groups) {
+    const gTeams = t.teams.filter((x) => x.groupId === g.id).map((x) => ({ id: x.id, name: x.name }));
+    const played = matches
+      .filter((m) => m.groupId === g.id && m.status === "CONFIRMED" && m.teamAId && m.teamBId && m.scoreA !== null && m.scoreB !== null)
+      .map((m) => ({ teamAId: m.teamAId!, teamBId: m.teamBId!, scoreA: m.scoreA!, scoreB: m.scoreB! }));
+    standings.set(g.id, computeStandings(gTeams, played, rules));
+  }
+
+  const running = slots.filter((s) => s.projection.state === "running");
+  const upcoming = slots.filter((s) => s.projection.state === "upcoming");
+  const delaySec = Math.max(0, ...slots.filter((s) => s.projection.state !== "done").map((s) => s.projection.delaySec));
+
+  return {
+    ...t,
+    slots,
+    matches,
+    standings,
+    format: formatOf(t),
+    running,
+    next: upcoming[0] ?? null,
+    upcoming,
+    delaySec,
+    now,
+    teamName,
+    tableLabel: (n: number) => t.tableLabels[n - 1] ?? `Table ${n}`,
+  };
+}
+
+function describeSide(
+  kind: string,
+  name: string | undefined,
+  groupId: string | null,
+  rank: number | null,
+  groupName: Map<string, string>,
+): string {
+  if (name) return name;
+  switch (kind) {
+    case "GROUP_RANK":
+      return `${ordinal(rank ?? 0)} ${groupId ? groupName.get(groupId) ?? "group" : "group"}`;
+    case "WILDCARD":
+      return `Best 3rd #${rank ?? "?"}`;
+    case "WINNER":
+      return "Winner TBD";
+    case "LOSER":
+      return "Loser TBD";
+    default:
+      return "TBD";
+  }
+}
+
+export function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+
+export function slotState(p: SlotProjection) {
+  return p.state;
+}
+
+export function fmtDelay(sec: number): string {
+  const m = Math.round(Math.abs(sec) / 60);
+  if (m === 0) return "on time";
+  return sec > 0 ? `${m} min late` : `${m} min early`;
+}
