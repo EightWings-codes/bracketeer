@@ -1,6 +1,6 @@
 # Deploying Bracketeer (Neon + Vercel)
 
-**Live:** https://bracketeer.vercel.app — Vercel project `lichterloh/bracketeer`, connected to
+**Live:** https://bracketeer-lichterloh.vercel.app — Vercel project `lichterloh/bracketeer`, connected to
 `EightWings-codes/bracketeer` (pushes to `main` deploy). Database: a separate `bracketeer`
 database inside the existing Neon project that also hosts beerpong-elo (same host, own DB).
 The steps below document how it was set up and how to redo it from scratch.
@@ -31,7 +31,7 @@ created/synced on every deploy.
 | `DATABASE_URL` | Neon pooled connection string |
 | `DATABASE_URL_UNPOOLED` | Neon direct connection string |
 | `AUTH_SECRET` | `openssl rand -base64 32` |
-| `AUTH_URL` | `https://<your-app>.vercel.app` (set after the first deploy, then redeploy) |
+| `AUTH_URL` | not needed on Vercel (`AUTH_TRUST_HOST` covers it); set only for a custom domain |
 | `AUTH_TRUST_HOST` | `true` |
 
 ## 4. First admin **[you, once]**
@@ -49,7 +49,7 @@ node scripts/seed.mjs
 
 ## 5. Deploy & check
 
-- Deploy, copy the `*.vercel.app` URL, set `AUTH_URL`, redeploy.
+- Deploy. The production alias is `<project>-<team>.vercel.app`; plain `<project>.vercel.app` may be taken by someone else.
 - Sign in at `/signin` → `/admin/new` → create a **test-mode** tournament first and
   rehearse with the Test mode tab before the real event.
 
