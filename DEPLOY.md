@@ -1,5 +1,10 @@
 # Deploying Bracketeer (Neon + Vercel)
 
+**Live:** https://bracketeer.vercel.app — Vercel project `lichterloh/bracketeer`, connected to
+`EightWings-codes/bracketeer` (pushes to `main` deploy). Database: a separate `bracketeer`
+database inside the existing Neon project that also hosts beerpong-elo (same host, own DB).
+The steps below document how it was set up and how to redo it from scratch.
+
 Steps that need your login are marked **[you]**. Everything else is already done in the repo.
 
 ## 1. Neon database **[you]**
