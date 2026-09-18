@@ -143,3 +143,77 @@ describe.skipIf(!RUN)("lock → generate → play → bracket advances (integrat
     await prisma.tournament.update({ where: { id: tid }, data: { openScoring: true } });
   });
 });
+
+describe.skipIf(!RUN)("double elimination plays through to a grand final (integration)", () => {
+  const DE_SLUG = "rehearsal-de";
+  let tid: string;
+  let adminId: string;
+
+  beforeAll(async () => {
+    await prisma.tournament.deleteMany({ where: { slug: DE_SLUG } });
+    const admin =
+      (await prisma.user.findFirst({ where: { isAdmin: true } })) ??
+      (await prisma.user.create({ data: { username: "t-admin", passwordHash: "x", isAdmin: true } }));
+    adminId = admin.id;
+    const t = await createTournament(
+      {
+        name: "Rehearsal Double",
+        slug: DE_SLUG,
+        startsAt: new Date(Date.now() - 5 * 60_000),
+        gameDurationSec: 30,
+        breakDurationSec: 10,
+        tableCount: 4,
+        testMode: true,
+      },
+      adminId,
+    );
+    tid = t.id;
+    await seedTeams(tid, 8, seededRng(9));
+    await setTournamentStatus(tid, "LOCKED", adminId);
+  });
+
+  afterAll(async () => {
+    if (!KEEP) await prisma.tournament.deleteMany({ where: { slug: DE_SLUG } });
+  });
+
+  it("stores the losers bracket and grand final stages", async () => {
+    await generateTournamentPlan(tid, "de8", adminId, { seed: 4 });
+    const v = (await loadTournamentView(DE_SLUG))!;
+    expect(v.matches).toHaveLength(14);
+    expect(v.matches.filter((m) => m.stage === "LOSERS")).toHaveLength(6);
+    expect(v.matches.filter((m) => m.stage === "GRAND_FINAL")).toHaveLength(1);
+    // Only the opening winners round knows its teams up front.
+    expect(v.matches.filter((m) => m.teamAId && m.teamBId)).toHaveLength(4);
+  });
+
+  it("drops beaten teams into the losers bracket as results come in", async () => {
+    let v = (await loadTournamentView(DE_SLUG))!;
+    const beaten: string[] = [];
+    for (const s of v.slots) {
+      await startSlot(s.id, adminId);
+      const fresh = (await loadTournamentView(DE_SLUG))!;
+      for (const m of fresh.matches.filter((x) => x.slotId === s.id)) {
+        expect(m.teamAId).toBeTruthy();
+        expect(m.teamBId).toBeTruthy();
+        await confirmMatch(m.id, 10, 6, adminId);
+        beaten.push(m.teamBId!);
+      }
+      await stopSlot(s.id, adminId);
+    }
+    v = (await loadTournamentView(DE_SLUG))!;
+    expect(v.status).toBe("FINISHED");
+
+    // 14 matches, 14 defeats. Side A always won here, so the winners-bracket
+    // champion takes the grand final unbeaten and everyone else goes out on a
+    // second defeat — the property that makes this double and not single.
+    const losses = new Map<string, number>();
+    for (const id of beaten) losses.set(id, (losses.get(id) ?? 0) + 1);
+    expect(beaten).toHaveLength(14);
+    expect(losses.size).toBe(7);
+    expect([...losses.values()].every((n) => n === 2)).toBe(true);
+
+    const gf = v.matches.find((m) => m.stage === "GRAND_FINAL")!;
+    expect(gf.status).toBe("CONFIRMED");
+    expect(losses.get(gf.teamAId!)).toBeUndefined();
+  });
+});

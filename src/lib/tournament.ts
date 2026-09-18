@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma";
 import { APP } from "./config";
-import { generatePlan, type PlanSource, type TeamRef } from "./bracket";
+import { generatePlan, type PlanSource, type Stage, type TeamRef } from "./bracket";
 import { findPreset, type FormatConfig } from "./formats";
 import { randomSeed, seededRng } from "./rng";
 import { resolveSources, type ResolvableMatch } from "./resolve";
@@ -543,7 +543,7 @@ export async function deleteMatch(matchId: string, actorId: string) {
 
 export async function createSlot(
   tournamentId: string,
-  input: { label: string; stage: "GROUP" | "R16" | "QUARTER" | "SEMI" | "THIRD" | "FINAL"; afterIndex: number | null },
+  input: { label: string; stage: Stage; afterIndex: number | null },
   actorId: string,
 ) {
   return prisma.$transaction(async (tx) => {

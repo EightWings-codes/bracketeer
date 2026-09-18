@@ -4,7 +4,7 @@
  * layer (tournament.ts) resolves them as results come in.
  */
 import type { FormatConfig } from "./formats";
-import { qualifierCount, validateFormat } from "./formats";
+import { eliminationOf, qualifierCount, validateFormat } from "./formats";
 import { roundRobinRounds } from "./roundrobin";
 import { shuffle } from "./rng";
 
@@ -14,7 +14,19 @@ export interface TeamRef {
   seed: number | null;
 }
 
-export type Stage = "GROUP" | "R16" | "QUARTER" | "SEMI" | "THIRD" | "FINAL";
+export const STAGES = [
+  "GROUP",
+  "R32",
+  "R16",
+  "QUARTER",
+  "SEMI",
+  "THIRD",
+  "FINAL",
+  "LOSERS",
+  "GRAND_FINAL",
+] as const;
+
+export type Stage = (typeof STAGES)[number];
 
 export type PlanSource =
   | { kind: "TEAM"; teamId: string }
@@ -90,6 +102,7 @@ export function seedOrder(n: number): number[] {
 }
 
 function stageFor(matchesInRound: number): Stage {
+  if (matchesInRound >= 16) return "R32";
   if (matchesInRound >= 8) return "R16";
   if (matchesInRound === 4) return "QUARTER";
   if (matchesInRound === 2) return "SEMI";
@@ -98,6 +111,8 @@ function stageFor(matchesInRound: number): Stage {
 
 function roundLabel(stage: Stage): string {
   switch (stage) {
+    case "R32":
+      return "Round of 32";
     case "R16":
       return "Round of 16";
     case "QUARTER":
@@ -108,6 +123,8 @@ function roundLabel(stage: Stage): string {
       return "Final";
     case "THIRD":
       return "3rd place";
+    case "GRAND_FINAL":
+      return "Grand final";
     default:
       return "Group";
   }
@@ -193,6 +210,69 @@ export function layoutFirstRound(
   });
 }
 
+/**
+ * Double elimination: a losers bracket runs alongside the winners bracket and
+ * you are only out after a second defeat. Rounds are emitted in playing order
+ * — WB round 1, then for every further winners round a "minor" losers round
+ * (survivors play each other) before it and a "major" one after it (minor
+ * winners meet the teams just dropped out of the winners bracket) — so every
+ * source reference points at a match that is already scheduled.
+ *
+ * The grand final is a single match: no bracket reset, so the losers-bracket
+ * champion does not have to win twice.
+ */
+export function doubleEliminationRounds(
+  ordered: TeamRef[],
+  emit: (label: string, stage: Stage, pairs: Array<[PlanSource, PlanSource]>) => string[],
+): void {
+  const n = ordered.length;
+  const k = Math.round(Math.log2(n));
+  if (!Number.isInteger(k) || 2 ** k !== n || k < 2) {
+    throw new Error("Double elimination needs a power of two teams, at least 4.");
+  }
+
+  const winner = (key: string): PlanSource => ({ kind: "WINNER", matchKey: key });
+  const loser = (key: string): PlanSource => ({ kind: "LOSER", matchKey: key });
+  const pairUp = (src: PlanSource[]): Array<[PlanSource, PlanSource]> =>
+    chunk(src, 2).map(([a, b]) => [a!, b!] as [PlanSource, PlanSource]);
+  const wbLabel = (r: number, count: number) =>
+    r === k - 1 ? "Winners final" : `Winners ${roundLabel(stageFor(count)).toLowerCase()}`;
+
+  const order = seedOrder(n);
+  const openers = chunk(order, 2).map(
+    ([x, y]) =>
+      [
+        { kind: "TEAM", teamId: ordered[x! - 1]!.id },
+        { kind: "TEAM", teamId: ordered[y! - 1]!.id },
+      ] as [PlanSource, PlanSource],
+  );
+
+  let wbKeys = emit(wbLabel(0, openers.length), stageFor(openers.length), openers);
+  let wbAdvance = wbKeys.map(winner);
+  let lbFeed = wbKeys.map(loser);
+  let lbRound = 0;
+
+  for (let r = 1; r < k; r++) {
+    const minorKeys = emit(`Losers round ${++lbRound}`, "LOSERS", pairUp(lbFeed));
+
+    const wbPairs = pairUp(wbAdvance);
+    wbKeys = emit(wbLabel(r, wbPairs.length), stageFor(wbPairs.length), wbPairs);
+    wbAdvance = wbKeys.map(winner);
+
+    // Reversing the drop-downs keeps a team from immediately replaying whoever
+    // knocked them out of the winners bracket.
+    const drops = wbKeys.map(loser).reverse();
+    const majorKeys = emit(
+      `Losers round ${++lbRound}`,
+      "LOSERS",
+      minorKeys.map((key, i) => [winner(key), drops[i]!] as [PlanSource, PlanSource]),
+    );
+    lbFeed = majorKeys.map(winner);
+  }
+
+  emit("Grand final", "GRAND_FINAL", [[wbAdvance[0]!, lbFeed[0]!]]);
+}
+
 export function generatePlan(
   config: FormatConfig,
   teams: TeamRef[],
@@ -252,7 +332,30 @@ export function generatePlan(
     });
   }
 
+  /** One knockout round → slots of `tableCount` matches. Returns match keys. */
+  const emitRound = (label: string, stage: Stage, pairs: Array<[PlanSource, PlanSource]>): string[] => {
+    const roundMatches = pairs.map(([a, b]) => ({
+      key: `m${++matchNo}`,
+      groupKey: null,
+      sourceA: a,
+      sourceB: b,
+    }));
+    const parts = chunk(roundMatches, tableCount);
+    parts.forEach((part, pi) => {
+      const suffix = parts.length > 1 ? ` (${pi + 1}/${parts.length})` : "";
+      const si = pushSlot(`${label}${suffix}`, stage);
+      part.forEach((m, ti) => matches.push({ ...m, slotIndex: si, tableNo: ti + 1 }));
+    });
+    return roundMatches.map((m) => m.key);
+  };
+
   // --- Knockout ----------------------------------------------------------
+  if (eliminationOf(config) === "DOUBLE") {
+    doubleEliminationRounds(ordered, emitRound);
+    slots.sort((a, b) => a.index - b.index);
+    return { groups, slots, matches };
+  }
+
   const q = qualifierCount(config, teams.length);
   if (q >= 2) {
     let current = layoutFirstRound(

@@ -33,6 +33,10 @@ export async function loadTournamentView(slug: string, now = new Date()) {
   const slotById = new Map(t.slots.map((s) => [s.id, s]));
   const teamName = new Map(t.teams.map((x) => [x.id, x.name]));
   const groupName = new Map(t.groups.map((g) => [g.id, g.name]));
+  // Short "where does this side come from" reference, e.g. "Losers round 1 T2".
+  const matchRef = new Map(
+    t.matches.map((m) => [m.id, `${slotById.get(m.slotId)!.label} T${m.tableNo}`]),
+  );
 
   const slots = t.slots.map((s) => ({
     ...s,
@@ -50,8 +54,8 @@ export async function loadTournamentView(slug: string, now = new Date()) {
         stage: slot.stage,
         projection: projection.get(slot.index)!,
         groupName: m.groupId ? groupName.get(m.groupId) ?? null : null,
-        labelA: describeSide(m.sourceAKind, m.teamA?.name, m.sourceAGroupId, m.sourceARank, groupName),
-        labelB: describeSide(m.sourceBKind, m.teamB?.name, m.sourceBGroupId, m.sourceBRank, groupName),
+        labelA: describeSide(m.sourceAKind, m.teamA?.name, m.sourceAGroupId, m.sourceARank, groupName, m.sourceAMatchId, matchRef),
+        labelB: describeSide(m.sourceBKind, m.teamB?.name, m.sourceBGroupId, m.sourceBRank, groupName, m.sourceBMatchId, matchRef),
       };
     })
     .sort((a, b) => a.slotIndex - b.slotIndex || a.tableNo - b.tableNo);
@@ -92,17 +96,20 @@ function describeSide(
   groupId: string | null,
   rank: number | null,
   groupName: Map<string, string>,
+  sourceMatchId: string | null,
+  matchRef: Map<string, string>,
 ): string {
   if (name) return name;
+  const from = sourceMatchId ? matchRef.get(sourceMatchId) : undefined;
   switch (kind) {
     case "GROUP_RANK":
       return `${ordinal(rank ?? 0)} ${groupId ? groupName.get(groupId) ?? "group" : "group"}`;
     case "WILDCARD":
       return `Best 3rd #${rank ?? "?"}`;
     case "WINNER":
-      return "Winner TBD";
+      return from ? `Winner of ${from}` : "Winner TBD";
     case "LOSER":
-      return "Loser TBD";
+      return from ? `Loser of ${from}` : "Loser TBD";
     default:
       return "TBD";
   }

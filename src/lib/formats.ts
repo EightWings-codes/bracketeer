@@ -16,6 +16,17 @@ export interface FormatConfig {
   /** Extra "best n-th placed" qualifiers across groups. */
   wildcards: number;
   thirdPlaceMatch: boolean;
+  /**
+   * Knockout style. DOUBLE adds a losers bracket and a grand final: you are
+   * out after two defeats. Omitted on older stored snapshots — treat as SINGLE.
+   */
+  elimination?: Elimination;
+}
+
+export type Elimination = "SINGLE" | "DOUBLE";
+
+export function eliminationOf(c: FormatConfig): Elimination {
+  return c.elimination ?? "SINGLE";
 }
 
 export const PRESETS: FormatConfig[] = [
@@ -90,6 +101,49 @@ export const PRESETS: FormatConfig[] = [
     thirdPlaceMatch: true,
   },
   {
+    id: "ko32",
+    label: "32 teams · single elimination",
+    teamCount: 32,
+    groupCount: 0,
+    groupSize: 0,
+    advancePerGroup: 0,
+    wildcards: 0,
+    thirdPlaceMatch: true,
+  },
+  {
+    id: "de8",
+    label: "8 teams · double elimination",
+    teamCount: 8,
+    groupCount: 0,
+    groupSize: 0,
+    advancePerGroup: 0,
+    wildcards: 0,
+    thirdPlaceMatch: false,
+    elimination: "DOUBLE",
+  },
+  {
+    id: "de16",
+    label: "16 teams · double elimination",
+    teamCount: 16,
+    groupCount: 0,
+    groupSize: 0,
+    advancePerGroup: 0,
+    wildcards: 0,
+    thirdPlaceMatch: false,
+    elimination: "DOUBLE",
+  },
+  {
+    id: "de32",
+    label: "32 teams · double elimination",
+    teamCount: 32,
+    groupCount: 0,
+    groupSize: 0,
+    advancePerGroup: 0,
+    wildcards: 0,
+    thirdPlaceMatch: false,
+    elimination: "DOUBLE",
+  },
+  {
     id: "rr",
     label: "Any number · single round robin, no knockout",
     teamCount: null,
@@ -126,6 +180,12 @@ export function validateFormat(c: FormatConfig, teamCount: number): string | nul
   }
   if (c.groupCount > 0 && c.groupCount * c.groupSize !== teamCount) {
     return "Group layout does not match the team count.";
+  }
+  if (eliminationOf(c) === "DOUBLE") {
+    if (c.groupCount > 0) return "Double elimination does not take a group stage.";
+    if (c.thirdPlaceMatch) return "Double elimination settles 3rd place in the losers bracket.";
+    if (teamCount < 4) return "Double elimination needs at least 4 teams.";
+    if (!isPowerOfTwo(teamCount)) return `Double elimination needs a power of two teams, got ${teamCount}.`;
   }
   const q = qualifierCount(c, teamCount);
   if (q > 0 && !isPowerOfTwo(q)) {

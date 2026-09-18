@@ -106,7 +106,8 @@ describe("generatePlan", () => {
 
   it("offers only fitting presets for a team count", () => {
     expect(presetsFor(12).map((p) => p.id)).toEqual(["g12-3x4-qf", "rr"]);
-    expect(presetsFor(8).map((p) => p.id)).toEqual(["g8-2x4-sf", "ko8", "rr"]);
+    expect(presetsFor(8).map((p) => p.id)).toEqual(["g8-2x4-sf", "ko8", "de8", "rr"]);
+    expect(presetsFor(32).map((p) => p.id)).toEqual(["ko32", "de32", "rr"]);
   });
 
   it("rejects a wrong team count", () => {
@@ -264,5 +265,99 @@ describe("12-team walk-through with resolveSources", () => {
     const r = apply();
     expect(r.outOfSync).toContain(final.id);
     expect(final.teamAId).not.toBeNull();
+  });
+});
+
+describe("single elimination", () => {
+  it.each([
+    [8, "ko8", 4],
+    [16, "ko16", 8],
+    [32, "ko32", 16],
+  ])("%i teams produce a full bracket", (n, id, firstRound) => {
+    const seeded = teams(n).map((t, i) => ({ ...t, seed: i + 1 }));
+    const plan = generatePlan(findPreset(id)!, seeded, firstRound, seededRng(7));
+    // n-1 knockout matches, plus the 3rd-place match these presets carry.
+    expect(plan.matches).toHaveLength(n - 1 + 1);
+    const entrants = plan.matches.flatMap((m) => [m.sourceA, m.sourceB]).filter((x) => x.kind === "TEAM");
+    expect(entrants).toHaveLength(n);
+    const opener = plan.matches.filter((m) => m.slotIndex === 0);
+    expect(opener).toHaveLength(firstRound);
+    // Seeds meet in the standard order: 1 v n, then 2 v n-1 in the other half.
+    expect(opener[0]!.sourceA).toEqual({ kind: "TEAM", teamId: "t1" });
+    expect(opener[0]!.sourceB).toEqual({ kind: "TEAM", teamId: `t${n}` });
+    expect(plan.slots.filter((s) => s.stage === "FINAL")).toHaveLength(1);
+  });
+});
+
+describe("double elimination", () => {
+  it.each([
+    [8, "de8"],
+    [16, "de16"],
+    [32, "de32"],
+  ])("%i teams play 2n−2 matches with a losers bracket", (n, id) => {
+    const plan = generatePlan(findPreset(id)!, teams(n), n / 2, seededRng(3));
+    expect(plan.matches).toHaveLength(2 * n - 2);
+
+    const stageOf = (m: (typeof plan.matches)[number]) => plan.slots[m.slotIndex]!.stage;
+    const k = Math.log2(n);
+    expect(plan.matches.filter((m) => stageOf(m) === "LOSERS")).toHaveLength(n - 2);
+    expect(plan.matches.filter((m) => stageOf(m) === "GRAND_FINAL")).toHaveLength(1);
+    // Every team enters once, in the winners bracket.
+    const entrants = plan.matches.flatMap((m) => [m.sourceA, m.sourceB]).filter((x) => x.kind === "TEAM");
+    expect(new Set(entrants.map((x) => (x as { teamId: string }).teamId)).size).toBe(n);
+    expect(plan.slots.filter((s) => s.label.startsWith("Losers round"))).toHaveLength(2 * (k - 1));
+    expect(plan.groups).toHaveLength(0);
+  });
+
+  it("schedules every source before the match that consumes it", () => {
+    const plan = generatePlan(findPreset("de8")!, teams(8), 4, seededRng(11));
+    const slotOf = new Map(plan.matches.map((m) => [m.key, m.slotIndex]));
+    for (const m of plan.matches) {
+      for (const src of [m.sourceA, m.sourceB]) {
+        if (src.kind !== "WINNER" && src.kind !== "LOSER") continue;
+        expect(slotOf.get(src.matchKey)!).toBeLessThan(m.slotIndex);
+      }
+    }
+  });
+
+  it("sends every first-round loser into the losers bracket exactly once", () => {
+    const plan = generatePlan(findPreset("de8")!, teams(8), 4, seededRng(5));
+    const openers = plan.matches.filter((m) => m.slotIndex === 0).map((m) => m.key);
+    const dropped = plan.matches
+      .flatMap((m) => [m.sourceA, m.sourceB])
+      .filter((s) => s.kind === "LOSER")
+      .map((s) => (s as { matchKey: string }).matchKey);
+    for (const key of openers) expect(dropped.filter((d) => d === key)).toHaveLength(1);
+    // The grand final takes the two survivors, never a loser reference.
+    const gf = plan.matches.find((m) => plan.slots[m.slotIndex]!.stage === "GRAND_FINAL")!;
+    expect(gf.sourceA.kind).toBe("WINNER");
+    expect(gf.sourceB.kind).toBe("WINNER");
+  });
+
+  it("plays the whole de8 bracket out to one champion", () => {
+    const plan = generatePlan(findPreset("de8")!, teams(8), 4, seededRng(2));
+    // Lower team number always wins; team 1 must take the grand final.
+    const num = (id: string) => Number(id.slice(1));
+    const winnerOf = new Map<string, string>();
+    const loserOf = new Map<string, string>();
+    const side = (s: (typeof plan.matches)[number]["sourceA"]): string => {
+      if (s.kind === "TEAM") return s.teamId;
+      if (s.kind === "WINNER") return winnerOf.get(s.matchKey)!;
+      if (s.kind === "LOSER") return loserOf.get(s.matchKey)!;
+      throw new Error(`Unexpected source in a double-elimination plan: ${s.kind}`);
+    };
+
+    for (const m of [...plan.matches].sort((a, b) => a.slotIndex - b.slotIndex)) {
+      const a = side(m.sourceA);
+      const b = side(m.sourceB);
+      expect(a).toBeDefined();
+      expect(b).toBeDefined();
+      winnerOf.set(m.key, num(a) < num(b) ? a : b);
+      loserOf.set(m.key, num(a) < num(b) ? b : a);
+    }
+    const gf = plan.matches.find((m) => plan.slots[m.slotIndex]!.stage === "GRAND_FINAL")!;
+    expect(winnerOf.get(gf.key)).toBe("t1");
+    // Runner-up came up through the losers bracket after losing to team 1.
+    expect(loserOf.get(gf.key)).toBe("t2");
   });
 });

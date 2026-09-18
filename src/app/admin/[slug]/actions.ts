@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/admin-guard";
+import type { Stage } from "@/lib/bracket";
 import { prisma } from "@/lib/prisma";
 import { seededRng, randomSeed } from "@/lib/rng";
 import * as sim from "@/lib/simulator";
@@ -248,7 +249,7 @@ export const createSlotAction = action(async (fd, adminId) => {
     id,
     {
       label: str(fd, "label") || "Extra round",
-      stage: (str(fd, "stage") || "GROUP") as "GROUP" | "R16" | "QUARTER" | "SEMI" | "THIRD" | "FINAL",
+      stage: (str(fd, "stage") || "GROUP") as Stage,
       afterIndex: after ?? null,
     },
     adminId,

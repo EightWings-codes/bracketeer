@@ -16,12 +16,50 @@ const COLORS: Record<string, string> = {
   TEST: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-950 dark:text-fuchsia-300",
 };
 
-export default function StatusBadge({ value, className = "" }: { value: string; className?: string }) {
+/**
+ * One glyph per state, so a badge reads at a glance and still works when the
+ * label is dropped. The lifecycle runs ✎ → ✚ → ⏸ → ▶ → ✓.
+ */
+export const SYMBOLS: Record<string, string> = {
+  DRAFT: "✎",
+  REGISTRATION: "✚",
+  LOCKED: "⏸",
+  RUNNING: "▶",
+  FINISHED: "✓",
+  PENDING: "◌",
+  CONFIRMED: "✓",
+  REJECTED: "✕",
+  SCHEDULED: "○",
+  REPORTED: "✎",
+  VOID: "✕",
+  done: "✓",
+  running: "▶",
+  upcoming: "○",
+  TEST: "⚑",
+};
+
+export function statusSymbol(value: string): string {
+  return SYMBOLS[value] ?? "•";
+}
+
+export default function StatusBadge({
+  value,
+  className = "",
+  symbolOnly = false,
+}: {
+  value: string;
+  className?: string;
+  /** Render just the glyph — the label stays available to screen readers. */
+  symbolOnly?: boolean;
+}) {
+  const label = value.toLowerCase();
   return (
     <span
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${COLORS[value] ?? COLORS.DRAFT} ${className}`}
+      title={symbolOnly ? label : undefined}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${COLORS[value] ?? COLORS.DRAFT} ${className}`}
     >
-      {value.toLowerCase()}
+      <span aria-hidden="true">{statusSymbol(value)}</span>
+      <span className={symbolOnly ? "sr-only" : ""}>{label}</span>
     </span>
   );
 }

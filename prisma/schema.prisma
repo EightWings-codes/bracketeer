@@ -30,11 +30,16 @@ enum TeamStatus {
 
 enum Stage {
   GROUP
+  R32
   R16
   QUARTER
   SEMI
   THIRD
   FINAL
+  /// Any losers-bracket round of a double-elimination format.
+  LOSERS
+  /// Double elimination decider: winners-bracket champion vs losers-bracket champion.
+  GRAND_FINAL
 }
 
 enum SourceKind {
