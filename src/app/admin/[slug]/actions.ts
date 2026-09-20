@@ -21,6 +21,7 @@ import {
   newJoinCode,
   resetPlan,
   setTournamentStatus,
+  type TournamentStatusName,
   startSlot,
   stopSlot,
   updateMatch,
@@ -108,11 +109,15 @@ export const updateTournamentAction = action(async (fd, adminId) => {
   if (tableCount) patch.tableCount = tableCount;
   const labels = str(fd, "tableLabels");
   if (labels !== undefined) patch.tableLabels = labels.split(",").map((x) => x.trim()).filter(Boolean);
+  for (const k of ["minTeamSize", "maxTeamSize"] as const) {
+    const v = num(fd, k);
+    if (v !== undefined && v !== null) patch[k] = v;
+  }
   for (const k of ["pointsWin", "pointsDraw", "pointsLoss"] as const) {
     const v = num(fd, k);
     if (v !== undefined && v !== null) patch[k] = v;
   }
-  for (const k of ["allowDraws", "testMode", "joinCodeEnabled", "openScoring"] as const) {
+  for (const k of ["allowDraws", "testMode", "joinCodeEnabled", "openScoring", "manualRounds"] as const) {
     const v = bool(fd, k);
     if (v !== undefined) patch[k] = v;
   }
@@ -122,7 +127,7 @@ export const updateTournamentAction = action(async (fd, adminId) => {
 
 export const setStatusAction = action(async (fd, adminId) => {
   const id = await tournamentId(fd);
-  const status = need(str(fd, "status"), "Missing status.") as "DRAFT" | "REGISTRATION" | "LOCKED" | "RUNNING" | "FINISHED";
+  const status = need(str(fd, "status"), "Missing status.") as TournamentStatusName;
   await setTournamentStatus(id, status, adminId);
 });
 

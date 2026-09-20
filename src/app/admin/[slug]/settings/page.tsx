@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import ActionForm, { inputCls } from "@/components/ActionForm";
+import { describeSize, unitLower } from "@/lib/roster";
 import { deleteTournamentAction, resetPlanAction, updateTournamentAction } from "../actions";
 
 const toLocal = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -14,7 +15,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
     <main className="space-y-6">
       <ActionForm
         action={updateTournamentAction}
-        hidden={{ slug, _bools: "allowDraws,testMode" }}
+        hidden={{ slug, _bools: "allowDraws,testMode,manualRounds" }}
         submitLabel="Save settings"
         className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
       >
@@ -41,12 +42,25 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
           </label>
           <label className="text-sm">
             <span className="block font-medium">Game duration (min)</span>
-            <input name="gameMin" type="number" step="0.5" min={0.5} defaultValue={t.gameDurationSec / 60} className={`${inputCls} w-full`} />
+            <input name="gameMin" type="number" step="0.5" min={0.5} defaultValue={t.gameDurationSec / 60} disabled={t.manualRounds} className={`${inputCls} w-full disabled:opacity-40`} />
           </label>
           <label className="text-sm">
             <span className="block font-medium">Break (min)</span>
-            <input name="breakMin" type="number" step="0.5" min={0} defaultValue={t.breakDurationSec / 60} className={`${inputCls} w-full`} />
+            <input name="breakMin" type="number" step="0.5" min={0} defaultValue={t.breakDurationSec / 60} disabled={t.manualRounds} className={`${inputCls} w-full disabled:opacity-40`} />
           </label>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <label>
+              <span className="block font-medium">Min players / {unitLower(t)}</span>
+              <input name="minTeamSize" type="number" min={1} max={20} defaultValue={t.minTeamSize} className={`${inputCls} w-full`} />
+            </label>
+            <label>
+              <span className="block font-medium">Max</span>
+              <input name="maxTeamSize" type="number" min={1} max={20} defaultValue={t.maxTeamSize} className={`${inputCls} w-full`} />
+            </label>
+          </div>
+          <p className="self-end text-xs text-zinc-500">
+            Currently {describeSize(t)} — set both to 1 for a singles tournament.
+          </p>
           <label className="text-sm sm:col-span-2">
             <span className="block font-medium">Table labels <span className="font-normal text-zinc-500">(comma-separated, optional)</span></span>
             <input name="tableLabels" defaultValue={t.tableLabels.join(", ")} placeholder="Left table, Right table" className={`${inputCls} w-full`} />
@@ -71,6 +85,12 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input name="allowDraws" type="checkbox" defaultChecked={t.allowDraws} /> Allow draws
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input name="manualRounds" type="checkbox" defaultChecked={t.manualRounds} />
+            <span>
+              Manual rounds <span className="text-zinc-500">— no timer or projected times; rounds move only when you start and stop them</span>
+            </span>
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input name="testMode" type="checkbox" defaultChecked={t.testMode} disabled={t.status !== "DRAFT"} />

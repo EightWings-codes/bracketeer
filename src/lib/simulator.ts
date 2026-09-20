@@ -75,7 +75,7 @@ export async function simulateTick(tournamentId: string, opts: TickOptions): Pro
     } else say("Nobody registered this tick");
     return log;
   }
-  if (t.status !== "LOCKED" && t.status !== "RUNNING") {
+  if (t.status !== "LOCKED" && t.status !== "READY" && t.status !== "RUNNING") {
     say(`Nothing to simulate while ${t.status.toLowerCase()}`);
     return log;
   }

@@ -78,6 +78,13 @@ describe.skipIf(!RUN)("lock → generate → play → bracket advances (integrat
     expect(v.matches.filter((m) => m.stage === "QUARTER").every((m) => !m.teamAId && !m.teamBId)).toBe(true);
   });
 
+  it("refuses to start a round until the schedule is confirmed", async () => {
+    const v = (await loadTournamentView(SLUG))!;
+    const first = v.slots[0]!;
+    await expect(startSlot(first.id, adminId)).rejects.toThrow(/Confirm the schedule/);
+    await setTournamentStatus(tid, "READY", adminId);
+  });
+
   it("runs the clock, takes an open report, confirms, and fills the QF once groups finish", async () => {
     let v = (await loadTournamentView(SLUG))!;
     const groupSlots = v.slots.filter((s) => s.stage === "GROUP");
@@ -187,6 +194,7 @@ describe.skipIf(!RUN)("double elimination plays through to a grand final (integr
   });
 
   it("drops beaten teams into the losers bracket as results come in", async () => {
+    await setTournamentStatus(tid, "READY", adminId);
     let v = (await loadTournamentView(DE_SLUG))!;
     const beaten: string[] = [];
     for (const s of v.slots) {

@@ -7,7 +7,20 @@ const initial: RegisterFormState = {};
 const input =
   "rounded-lg border border-zinc-300 bg-transparent px-3 py-2 outline-none focus:border-emerald-500 dark:border-zinc-700";
 
-export default function RegisterForm({ slug, needsCode }: { slug: string; needsCode: boolean }) {
+export default function RegisterForm({
+  slug,
+  needsCode,
+  solo,
+  sizeHint,
+  minMembers,
+}: {
+  slug: string;
+  needsCode: boolean;
+  /** Singles tournament: the entrant's name is the player, so no roster. */
+  solo: boolean;
+  sizeHint: string;
+  minMembers: number;
+}) {
   const [state, action, pending] = useActionState(registerTeamAction, initial);
   const v = state.values;
   return (
@@ -17,13 +30,25 @@ export default function RegisterForm({ slug, needsCode }: { slug: string; needsC
     >
       <input type="hidden" name="slug" value={slug} />
       <label className="text-sm font-medium" htmlFor="name">
-        Team name
+        {solo ? "Your name" : "Team name"}
       </label>
       <input id="name" name="name" required minLength={2} maxLength={40} defaultValue={v?.name} className={input} />
-      <label className="mt-2 text-sm font-medium" htmlFor="members">
-        Players <span className="font-normal text-zinc-500">(one per line or comma-separated)</span>
-      </label>
-      <textarea id="members" name="members" rows={3} defaultValue={v?.members} className={input} />
+      {!solo && (
+        <>
+          <label className="mt-2 text-sm font-medium" htmlFor="members">
+            Players{" "}
+            <span className="font-normal text-zinc-500">({sizeHint}, one per line)</span>
+          </label>
+          <textarea
+            id="members"
+            name="members"
+            rows={3}
+            required={minMembers > 0}
+            defaultValue={v?.members}
+            className={input}
+          />
+        </>
+      )}
       <label className="mt-2 text-sm font-medium" htmlFor="contact">
         Contact <span className="font-normal text-zinc-500">(phone or handle, optional)</span>
       </label>
@@ -42,7 +67,7 @@ export default function RegisterForm({ slug, needsCode }: { slug: string; needsC
         disabled={pending}
         className="mt-2 rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
       >
-        {pending ? "Registering…" : "Register"}
+        {pending ? "Registering…" : solo ? "Enter" : "Register"}
       </button>
     </form>
   );

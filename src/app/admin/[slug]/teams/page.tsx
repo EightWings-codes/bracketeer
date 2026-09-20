@@ -27,7 +27,7 @@ export default async function TeamsPage({ params }: { params: Promise<{ slug: st
         </div>
         {t.status === "DRAFT" && <ActionForm action={setStatusAction} hidden={{ slug, status: "REGISTRATION" }} submitLabel="Open registration" inline />}
         {t.status === "REGISTRATION" && <ActionForm action={setStatusAction} hidden={{ slug, status: "LOCKED" }} submitLabel="Lock the field" inline />}
-        {t.status === "LOCKED" && <ActionForm action={setStatusAction} hidden={{ slug, status: "REGISTRATION" }} submitLabel="Unlock (re-open registration)" variant="secondary" inline />}
+        {(t.status === "LOCKED" || t.status === "READY") && <ActionForm action={setStatusAction} hidden={{ slug, status: "REGISTRATION" }} submitLabel="Unlock (re-open registration)" variant="secondary" inline />}
       </section>
 
       <section className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">

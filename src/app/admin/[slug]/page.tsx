@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { APP } from "@/lib/config";
+import { publicTournamentUrl } from "@/lib/public-url";
 import { fmtDelay, loadTournamentView } from "@/lib/view";
 import AutoRefresh from "@/components/AutoRefresh";
 import Countdown from "@/components/Countdown";
 import LocalTime from "@/components/LocalTime";
 import MatchRow from "@/components/MatchRow";
+import QrCode from "@/components/QrCode";
 import StatusBadge from "@/components/StatusBadge";
 import ActionForm, { inputCls } from "@/components/ActionForm";
 import {
@@ -24,6 +26,7 @@ export default async function ControlRoom({ params }: { params: Promise<{ slug: 
   const v = await loadTournamentView(slug);
   if (!v) notFound();
   const nowIso = v.now.toISOString();
+  const publicUrl = await publicTournamentUrl(slug);
   const audit = await prisma.auditLog.findMany({ where: { tournamentId: v.id }, orderBy: { createdAt: "desc" }, take: 20 });
   const pending = v.teams.filter((t) => t.status === "PENDING").length;
   const confirmed = v.teams.filter((t) => t.status === "CONFIRMED").length;
@@ -59,12 +62,53 @@ export default async function ControlRoom({ params }: { params: Promise<{ slug: 
             Choose a format →
           </Link>
         )}
-        {(v.status === "LOCKED" || v.status === "RUNNING") && (
+        {/* The schedule exists but nobody has signed it off yet. */}
+        {v.status === "LOCKED" && v.slots.length > 0 && (
+          <ActionForm
+            action={setStatusAction}
+            hidden={{ slug, status: "READY" }}
+            submitLabel="✓ Confirm schedule"
+            inline
+          />
+        )}
+        {v.status === "READY" && (
+          <>
+            <ActionForm
+              action={startSlotAction}
+              hidden={{ slug, slotId: v.slots[0]?.id }}
+              submitLabel="▶ Start tournament"
+              inline
+            />
+            <ActionForm
+              action={setStatusAction}
+              hidden={{ slug, status: "LOCKED" }}
+              submitLabel="Back to planning"
+              variant="ghost"
+              inline
+            />
+          </>
+        )}
+        {(v.status === "LOCKED" || v.status === "READY" || v.status === "RUNNING") && (
           <ActionForm action={setStatusAction} hidden={{ slug, status: "FINISHED" }} submitLabel="Finish" variant="secondary" inline />
         )}
         {v.status === "FINISHED" && (
           <ActionForm action={setStatusAction} hidden={{ slug, status: "RUNNING" }} submitLabel="Re-open" variant="secondary" inline />
         )}
+      </section>
+
+      {/* Share */}
+      <section className="flex flex-wrap items-center gap-5 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <QrCode value={publicUrl} size={140} />
+        <div className="min-w-0 space-y-1 text-sm">
+          <div className="text-base font-medium">Scan to join</div>
+          <div className="break-all font-mono text-zinc-500">{publicUrl}</div>
+          <p className="text-zinc-500">
+            {v.joinCodeEnabled ? <>Leads to the public dashboard — teams still need the join code <span className="font-mono">{v.joinCode}</span>.</> : <>Leads to the public dashboard, where anyone can register.</>}
+          </p>
+          <a href={`/admin/${slug}/qr`} className="inline-block text-emerald-600 hover:underline" download>
+            Download SVG ↓
+          </a>
+        </div>
       </section>
 
       {/* Gates */}
@@ -110,7 +154,7 @@ export default async function ControlRoom({ params }: { params: Promise<{ slug: 
       {/* Clock */}
       {v.slots.length > 0 && (
         <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          {v.delaySec > 60 && (
+          {!v.manualRounds && v.delaySec > 60 && (
             <div className="mb-3 rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">
               Running {fmtDelay(v.delaySec)}.
             </div>
@@ -122,7 +166,13 @@ export default async function ControlRoom({ params }: { params: Promise<{ slug: 
               {v.running.map((s) => (
                 <div key={s.id} className="mb-3">
                   <div className="text-xl font-semibold">{s.label}</div>
-                  <Countdown targetIso={s.projection.projectedEnd.toISOString()} serverNowIso={nowIso} className="text-5xl font-bold tabular-nums" />
+                  {v.manualRounds ? (
+                    <div className="text-sm text-zinc-500">
+                      round {s.index + 1} of {v.slots.length} · runs until you stop it
+                    </div>
+                  ) : (
+                    <Countdown targetIso={s.projection.projectedEnd.toISOString()} serverNowIso={nowIso} className="text-5xl font-bold tabular-nums" />
+                  )}
                   <div className="mt-2">
                     <ActionForm action={stopSlotAction} hidden={{ slug, slotId: s.id }} submitLabel="■ Stop round" variant="danger" inline />
                   </div>
@@ -134,11 +184,15 @@ export default async function ControlRoom({ params }: { params: Promise<{ slug: 
               {v.next ? (
                 <div>
                   <div className="text-xl font-semibold">{v.next.label}</div>
-                  <div className="text-sm text-zinc-500">
-                    planned ~<LocalTime iso={v.next.projection.projectedStart.toISOString()} />
-                    {v.next.projection.delaySec > 60 && ` (${fmtDelay(v.next.projection.delaySec)})`}
-                  </div>
-                  <Countdown targetIso={v.next.projection.projectedStart.toISOString()} serverNowIso={nowIso} className="text-3xl font-bold tabular-nums" overrunLabel="ready" />
+                  {!v.manualRounds && (
+                    <>
+                      <div className="text-sm text-zinc-500">
+                        planned ~<LocalTime iso={v.next.projection.projectedStart.toISOString()} />
+                        {v.next.projection.delaySec > 60 && ` (${fmtDelay(v.next.projection.delaySec)})`}
+                      </div>
+                      <Countdown targetIso={v.next.projection.projectedStart.toISOString()} serverNowIso={nowIso} className="text-3xl font-bold tabular-nums" overrunLabel="ready" />
+                    </>
+                  )}
                   <div className="mt-2">
                     <ActionForm action={startSlotAction} hidden={{ slug, slotId: v.next.id }} submitLabel="▶ Start round" inline />
                   </div>

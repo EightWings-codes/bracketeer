@@ -81,6 +81,10 @@ export async function loadTournamentView(slug: string, now = new Date()) {
     standings,
     format: formatOf(t),
     running,
+    /** Latest projected end across the running rounds — the "ends ~" caption. */
+    runningEnd: running.length
+      ? new Date(Math.max(...running.map((s) => s.projection.projectedEnd.getTime())))
+      : null,
     next: upcoming[0] ?? null,
     upcoming,
     delaySec,

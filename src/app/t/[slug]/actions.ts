@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { DomainError, registerTeam, submitScoreReport } from "@/lib/tournament";
+import { forgetTeam, rememberTeam } from "@/lib/team-cookie";
 
 export interface RegisterFormState {
   error?: string;
@@ -32,7 +33,7 @@ export async function registerTeamAction(
     contact: String(formData.get("contact") ?? ""),
     joinCode: String(formData.get("joinCode") ?? ""),
   };
-  const t = await prisma.tournament.findUnique({ where: { slug }, select: { id: true } });
+  const t = await prisma.tournament.findUnique({ where: { slug }, select: { id: true, maxTeamSize: true } });
   if (!t) return { error: "Tournament not found.", values };
 
   const h = await headers();
@@ -57,6 +58,8 @@ export async function registerTeamAction(
   } catch (e) {
     return { error: errorMessage(e, "Could not register."), values };
   }
+  // Remember this device so the dashboard can offer them their own match.
+  await rememberTeam(slug, token);
   revalidatePath(`/t/${slug}`);
   redirect(`/t/${slug}/team/${token}?new=1`);
 }
@@ -81,4 +84,12 @@ export async function submitScoreAction(
   revalidatePath(`/t/${slug}`);
   revalidatePath(`/admin/${slug}`);
   return { ok: true };
+}
+
+/** "Not you?" on the dashboard — drop the remembered team on this device. */
+export async function forgetTeamAction(_prev: unknown, formData: FormData) {
+  const slug = String(formData.get("slug") ?? "");
+  await forgetTeam(slug);
+  revalidatePath(`/t/${slug}`);
+  return {};
 }

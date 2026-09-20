@@ -18,6 +18,9 @@ enum TournamentStatus {
   DRAFT
   REGISTRATION
   LOCKED
+  /// Field locked, plan generated and signed off by an organiser. Nothing can
+  /// start until a schedule has been confirmed here.
+  READY
   RUNNING
   FINISHED
 }
@@ -82,10 +85,17 @@ model Tournament {
   allowDraws  Boolean @default(false)
   scoreLabel  String  @default("Points")
 
-  // Clock
+  // Roster. maxTeamSize 1 makes it a singles tournament and the UI says
+  // "player" rather than "team".
+  minTeamSize Int @default(1)
+  maxTeamSize Int @default(8)
+
+  // Clock. manualRounds drops the timer entirely: rounds only move when an
+  // organiser starts and stops them, and no times are shown or projected.
   startsAt         DateTime
   gameDurationSec  Int      @default(1200)
   breakDurationSec Int      @default(300)
+  manualRounds     Boolean  @default(false)
 
   // Venue
   tableCount  Int      @default(2)

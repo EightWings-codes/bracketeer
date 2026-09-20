@@ -2,6 +2,7 @@ const COLORS: Record<string, string> = {
   DRAFT: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   REGISTRATION: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300",
   LOCKED: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  READY: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300",
   RUNNING: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
   FINISHED: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   PENDING: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
@@ -18,12 +19,13 @@ const COLORS: Record<string, string> = {
 
 /**
  * One glyph per state, so a badge reads at a glance and still works when the
- * label is dropped. The lifecycle runs ✎ → ✚ → ⏸ → ▶ → ✓.
+ * label is dropped. The lifecycle runs ✎ → ✚ → ⏸ → ≡ → ▶ → ✓.
  */
 export const SYMBOLS: Record<string, string> = {
   DRAFT: "✎",
   REGISTRATION: "✚",
   LOCKED: "⏸",
+  READY: "≡",
   RUNNING: "▶",
   FINISHED: "✓",
   PENDING: "◌",

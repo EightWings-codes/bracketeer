@@ -36,10 +36,24 @@ export default function NewTournamentForm() {
           <input name="tableCount" type="number" min={1} defaultValue={2} className={`${inputCls} w-full`} />
         </label>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="text-sm">
+          <span className="block font-medium">Min players per team</span>
+          <input name="minTeamSize" type="number" min={1} max={20} defaultValue={1} className={`${inputCls} w-full`} />
+        </label>
+        <label className="text-sm">
+          <span className="block font-medium">Max</span>
+          <input name="maxTeamSize" type="number" min={1} max={20} defaultValue={8} className={`${inputCls} w-full`} />
+        </label>
+      </div>
+      <p className="-mt-1 text-xs text-zinc-500">Set both to 1 for a singles tournament.</p>
       <label className="text-sm font-medium">Score label</label>
       <input name="scoreLabel" defaultValue="Cups" className={inputCls} />
       <label className="flex items-center gap-2 text-sm">
         <input name="allowDraws" type="checkbox" /> Allow draws
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input name="manualRounds" type="checkbox" /> Manual rounds (no timer — you start and stop each round)
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input name="testMode" type="checkbox" /> Test mode (simulator enabled, hidden from the public list)

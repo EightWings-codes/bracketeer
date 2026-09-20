@@ -36,7 +36,7 @@ export default async function FormatPage({
 
   return (
     <main className="space-y-6">
-      {t.status !== "LOCKED" && t.status !== "RUNNING" && (
+      {t.status !== "LOCKED" && t.status !== "READY" && t.status !== "RUNNING" && (
         <p className="rounded-xl bg-amber-100 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
           Lock the field on the <Link href={`/admin/${slug}/teams`} className="underline">teams page</Link> before generating a plan.
           You can still preview formats.
@@ -77,7 +77,7 @@ export default async function FormatPage({
               <Link href={`/admin/${slug}/format?preview=${previewFormat.id}&seed=${randomSeed()}`} className="rounded-lg border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800">
                 Shuffle draw
               </Link>
-              {!problem && (t.status === "LOCKED" || t.status === "RUNNING") && (
+              {!problem && (t.status === "LOCKED" || t.status === "READY" || t.status === "RUNNING") && (
                 <ActionForm
                   action={generatePlanAction}
                   hidden={{ slug, formatId: previewFormat.id, seed, force: started ? "true" : undefined }}

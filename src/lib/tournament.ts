@@ -10,10 +10,19 @@ import { APP } from "./config";
 import { generatePlan, type PlanSource, type Stage, type TeamRef } from "./bracket";
 import { findPreset, type FormatConfig } from "./formats";
 import { randomSeed, seededRng } from "./rng";
+import { normaliseMembers, rosterProblem, sizeBoundsProblem } from "./roster";
 import { resolveSources, type ResolvableMatch } from "./resolve";
 import { projectSchedule, type SlotInput, type SlotProjection } from "./schedule";
 
 type Db = PrismaClient | Prisma.TransactionClient;
+
+export type TournamentStatusName =
+  | "DRAFT"
+  | "REGISTRATION"
+  | "LOCKED"
+  | "READY"
+  | "RUNNING"
+  | "FINISHED";
 
 export class DomainError extends Error {}
 
@@ -73,6 +82,9 @@ export interface TournamentInput {
   pointsLoss?: number;
   allowDraws?: boolean;
   scoreLabel?: string;
+  minTeamSize?: number;
+  maxTeamSize?: number;
+  manualRounds?: boolean;
   testMode?: boolean;
   joinCodeEnabled?: boolean;
   openScoring?: boolean;
@@ -101,6 +113,9 @@ export async function createTournament(input: TournamentInput, actorId: string) 
       pointsLoss: input.pointsLoss ?? 0,
       allowDraws: input.allowDraws ?? false,
       scoreLabel: input.scoreLabel ?? "Points",
+      minTeamSize: input.minTeamSize ?? 1,
+      maxTeamSize: input.maxTeamSize ?? 8,
+      manualRounds: input.manualRounds ?? false,
       testMode: input.testMode ?? false,
       joinCodeEnabled: input.joinCodeEnabled ?? false,
       joinCode: newJoinCode(),
@@ -122,6 +137,12 @@ export async function updateTournament(
     fail("Test mode can only be changed while the tournament is a draft.");
   }
   if (typeof patch.slug === "string") patch.slug = slugify(patch.slug);
+  if ("minTeamSize" in patch || "maxTeamSize" in patch) {
+    const min = Number(patch.minTeamSize ?? t.minTeamSize);
+    const max = Number(patch.maxTeamSize ?? t.maxTeamSize);
+    const problem = sizeBoundsProblem(min, max);
+    if (problem) fail(problem);
+  }
   const updated = await prisma.tournament.update({ where: { id }, data: patch });
   await audit(prisma, id, actorId, "tournament.update", patch as Prisma.InputJsonValue);
   return updated;
@@ -129,7 +150,7 @@ export async function updateTournament(
 
 export async function setTournamentStatus(
   id: string,
-  status: "DRAFT" | "REGISTRATION" | "LOCKED" | "RUNNING" | "FINISHED",
+  status: TournamentStatusName,
   actorId: string,
 ) {
   const t = await getTournament(prisma, id);
@@ -167,8 +188,11 @@ export async function registerTeam(tournamentId: string, input: RegisterInput, g
   const t = await getTournament(prisma, tournamentId);
   if (t.status !== "REGISTRATION") fail("Registration is not open.");
   const name = input.name.trim();
-  if (name.length < 2 || name.length > 40) fail("Team name must be 2–40 characters.");
-  const members = input.members.map((m) => m.trim()).filter(Boolean).slice(0, 8);
+  if (name.length < 2 || name.length > 40) fail("Name must be 2–40 characters.");
+  const listed = input.members.map((m) => m.trim()).filter(Boolean);
+  const problem = rosterProblem(t, listed);
+  if (problem) fail(problem);
+  const members = normaliseMembers(t, name, listed);
 
   if (!gate.bypassGates) {
     if (t.joinCodeEnabled) {
@@ -233,7 +257,9 @@ export async function generateTournamentPlan(
   opts: { seed?: number; force?: boolean } = {},
 ) {
   const t = await getTournament(prisma, tournamentId);
-  if (t.status !== "LOCKED" && t.status !== "RUNNING") fail("Lock the field before generating a plan.");
+  if (t.status !== "LOCKED" && t.status !== "READY" && t.status !== "RUNNING") {
+    fail("Lock the field before generating a plan.");
+  }
   const format = findPreset(formatId) ?? fail("Unknown format.");
   const started = await prisma.slot.count({ where: { tournamentId, startedAt: { not: null } } });
   if (started > 0 && !opts.force) fail("A round has already started. Use the danger zone to force regeneration.");
@@ -294,7 +320,13 @@ export async function generateTournamentPlan(
     }
     await tx.tournament.update({
       where: { id: tournamentId },
-      data: { formatId, formatConfig: format as unknown as Prisma.InputJsonValue, drawSeed: seed },
+      data: {
+        formatId,
+        formatConfig: format as unknown as Prisma.InputJsonValue,
+        drawSeed: seed,
+        // A new draw is a different schedule, so it needs confirming again.
+        ...(t.status === "READY" ? { status: "LOCKED" as const } : {}),
+      },
     });
     await audit(tx, tournamentId, actorId, "plan.generate", {
       formatId,
@@ -314,12 +346,16 @@ export function formatOf(t: { formatConfig: unknown }): FormatConfig | null {
 // ------------------------------------------------------------------ clock
 
 export async function startSlot(slotId: string, actorId: string | null, now = new Date()) {
-  const s = await prisma.slot.findUnique({ where: { id: slotId } });
+  const s = await prisma.slot.findUnique({ where: { id: slotId }, include: { tournament: true } });
   if (!s) fail("Round not found.");
   if (s!.startedAt && !s!.endedAt) fail("This round is already running.");
+  const status = s!.tournament.status;
+  if (status !== "READY" && status !== "RUNNING") {
+    fail("Confirm the schedule before starting a round.");
+  }
   await prisma.slot.update({ where: { id: slotId }, data: { startedAt: now, endedAt: null } });
   await prisma.tournament.updateMany({
-    where: { id: s!.tournamentId, status: "LOCKED" },
+    where: { id: s!.tournamentId, status: "READY" },
     data: { status: "RUNNING" },
   });
   await audit(prisma, s!.tournamentId, actorId, "slot.start", { slotId, index: s!.index, at: now.toISOString() });
@@ -577,7 +613,10 @@ export async function resetPlan(tournamentId: string, actorId: string) {
     await tx.slot.deleteMany({ where: { tournamentId } });
     await tx.group.deleteMany({ where: { tournamentId } });
     await tx.team.updateMany({ where: { tournamentId }, data: { groupId: null } });
-    await tx.tournament.update({ where: { id: tournamentId }, data: { formatId: null, formatConfig: undefined } });
+    await tx.tournament.update({
+      where: { id: tournamentId },
+      data: { formatId: null, formatConfig: undefined, status: "LOCKED" },
+    });
     await audit(tx, tournamentId, actorId, "plan.reset");
   });
 }
