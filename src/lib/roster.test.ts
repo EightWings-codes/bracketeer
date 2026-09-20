@@ -38,3 +38,24 @@ describe("roster rules", () => {
     expect(sizeBoundsProblem(1.5, 4)).toMatch(/whole numbers/);
   });
 });
+
+// Regression: a CONFIRMED match with a blank score reads as settled but is
+// skipped by both the standings and bracket resolution, so a knockout stalls
+// with nothing to show for it. Seen in production on 2026-09-20.
+describe("confirmed matches always carry a result", () => {
+  const confirmable = (scoreA: number | null, scoreB: number | null, teamAId: string | null, teamBId: string | null) => {
+    if (!teamAId || !teamBId) return "A confirmed match needs both teams.";
+    const whole = (n: number | null) => Number.isInteger(n) && (n as number) >= 0;
+    if (!whole(scoreA) || !whole(scoreB)) return "A confirmed match needs both scores as whole numbers ≥ 0.";
+    return null;
+  };
+
+  it("rejects the shapes that silently stall a bracket", () => {
+    expect(confirmable(1, null, "a", "b")).toMatch(/both scores/);
+    expect(confirmable(null, null, "a", "b")).toMatch(/both scores/);
+    expect(confirmable(1, 0, null, "b")).toMatch(/both teams/);
+    expect(confirmable(-1, 0, "a", "b")).toMatch(/both scores/);
+    expect(confirmable(1, 0, "a", "b")).toBeNull();
+    expect(confirmable(0, 0, "a", "b")).toBeNull();
+  });
+});

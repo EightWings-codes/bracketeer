@@ -531,9 +531,41 @@ export async function voidMatch(matchId: string, actorId: string, note?: string)
 }
 
 /** Partial admin edit of a match (scores, teams, table, status, note). Re-resolves. */
+/** Plain value out of a Prisma update field, which may be `{ set: value }`. */
+function patched<T>(patch: Record<string, unknown>, key: string, current: T): T {
+  if (!(key in patch)) return current;
+  const v = patch[key];
+  if (v !== null && typeof v === "object" && "set" in (v as object)) {
+    return (v as { set: T }).set;
+  }
+  return v as T;
+}
+
 export async function updateMatch(matchId: string, patch: Prisma.MatchUncheckedUpdateInput, actorId: string) {
-  const m = await prisma.match.findUnique({ where: { id: matchId } });
+  const m = await prisma.match.findUnique({ where: { id: matchId }, include: { tournament: true } });
   if (!m) fail("Match not found.");
+
+  // confirmMatch validates; this one used to write the patch verbatim, so a
+  // match could be marked CONFIRMED with a blank score. That reads as settled
+  // everywhere but resolves to nothing: it is skipped by the standings and by
+  // resolveSources, so a knockout silently stalls. Validate the *merged*
+  // state, not just the patch.
+  const raw = patch as Record<string, unknown>;
+  const next = {
+    status: patched(raw, "status", m!.status),
+    scoreA: patched<number | null>(raw, "scoreA", m!.scoreA),
+    scoreB: patched<number | null>(raw, "scoreB", m!.scoreB),
+    teamAId: patched<string | null>(raw, "teamAId", m!.teamAId),
+    teamBId: patched<string | null>(raw, "teamBId", m!.teamBId),
+  };
+  if (next.status === "CONFIRMED") {
+    if (!next.teamAId || !next.teamBId) fail("A confirmed match needs both teams.");
+    const { scoreA, scoreB } = next;
+    const whole = (n: number | null): n is number => Number.isInteger(n) && (n as number) >= 0;
+    if (!whole(scoreA) || !whole(scoreB)) fail("A confirmed match needs both scores as whole numbers ≥ 0.");
+    if (scoreA === scoreB && !m!.tournament.allowDraws) fail("Draws are not allowed in this tournament.");
+  }
+
   return prisma.$transaction(async (tx) => {
     // Pinning teams by hand turns the source into a fixed TEAM.
     if ("teamAId" in patch) Object.assign(patch, { sourceAKind: "TEAM", sourceAMatchId: null, sourceAGroupId: null, sourceARank: null });

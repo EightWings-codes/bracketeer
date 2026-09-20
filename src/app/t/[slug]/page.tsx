@@ -124,7 +124,15 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
                           {m.labelA} – {m.labelB}
                         </span>
                         <span className="tabular-nums">
-                          {m.status === "CONFIRMED" ? `${m.scoreA}:${m.scoreB}` : m.status === "REPORTED" ? "reported" : m.slotLabel}
+                          {/* Trust the scores, not the status — a match can be marked confirmed
+                              with a blank score, and "null:null" must never reach a player. */}
+                          {m.scoreA !== null && m.scoreB !== null
+                            ? `${m.scoreA}:${m.scoreB}`
+                            : m.status === "CONFIRMED"
+                              ? "no score"
+                              : m.status === "REPORTED"
+                                ? "reported"
+                                : m.slotLabel}
                         </span>
                       </li>
                     ))}
