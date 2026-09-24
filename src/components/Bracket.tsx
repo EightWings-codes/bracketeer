@@ -150,7 +150,7 @@ function Cell({
       {row(m.labelA, m.teamAId, m.scoreA, has && m.scoreA! > m.scoreB!)}
       {row(m.labelB, m.teamBId, m.scoreB, has && m.scoreB! > m.scoreA!)}
       <div className="px-3 py-1 text-xs text-zinc-500">
-        {m.slotLabel} · {tableLabel(m.tableNo)}
+        {m.placeLabel ?? m.slotLabel} · {tableLabel(m.tableNo)}
       </div>
     </div>
   );

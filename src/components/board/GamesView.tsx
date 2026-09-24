@@ -181,7 +181,7 @@ function MatchCard({
     >
       <div className="t-xs board-dim flex items-baseline justify-between gap-[1vh]">
         <span className="board-accent truncate font-semibold uppercase tracking-wide">{v.tableLabel(m.tableNo)}</span>
-        <span className="truncate">{m.groupName ?? m.slotLabel}</span>
+        <span className="truncate">{m.placeLabel ?? m.groupName ?? m.slotLabel}</span>
       </div>
       {side(m.labelA, m.teamAId, m.scoreA, hasScore && m.scoreA! > m.scoreB!)}
       {!hasScore && (

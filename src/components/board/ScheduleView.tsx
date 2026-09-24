@@ -98,6 +98,7 @@ export default function ScheduleView({
                     {fixtures.map((m) => (
                       <li key={m.id} className={`${fixtureSize} truncate`}>
                         <span className="t-xs board-accent">{v.tableLabel(m.tableNo)}</span>{" "}
+                        {m.placeLabel && <span className="t-xs board-dim">{m.placeLabel} </span>}
                         <Side label={m.labelA} known={Boolean(m.teamAId)} />
                         <span className="board-dim"> – </span>
                         <Side label={m.labelB} known={Boolean(m.teamBId)} />

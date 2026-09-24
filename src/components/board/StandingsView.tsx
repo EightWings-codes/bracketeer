@@ -113,9 +113,14 @@ function BoardBracket({
   const grandFinal = matches.filter((m) => m.stage === "GRAND_FINAL");
   const double = losers.length > 0 || grandFinal.length > 0;
   const third = double ? [] : matches.filter((m) => m.sourceAKind === "LOSER");
-  const winners = matches.filter((m) => m.stage !== "LOSERS" && m.stage !== "GRAND_FINAL" && !third.includes(m));
+  // A game for 5th or 7th shares the knockout's round but is not part of its
+  // tree — in a column it would read as a semi-final, which it is not.
+  const places = matches.filter((m) => m.placeLabel);
+  const winners = matches.filter(
+    (m) => m.stage !== "LOSERS" && m.stage !== "GRAND_FINAL" && !third.includes(m) && !places.includes(m),
+  );
 
-  const row = (label: string | null, ms: ViewMatch[], trailing: { title: string; matches: ViewMatch[] } | null) => {
+  const row = (label: string | null, ms: ViewMatch[], trailing: Array<{ title: string; matches: ViewMatch[] }>) => {
     const cols = bracketColumns(ms);
     if (cols.length === 0) return null;
     return (
@@ -135,14 +140,17 @@ function BoardBracket({
                 {c.matches.map((m) => (
                   <Cell key={m.id} m={m} v={v} live={liveSlots.has(m.slotId)} compact={compact} />
                 ))}
-                {trailing && i === cols.length - 1 && (
-                  <>
-                    <div className="t-xs board-dim mt-[2vh] uppercase tracking-widest">{trailing.title}</div>
-                    {trailing.matches.map((m) => (
-                      <Cell key={m.id} m={m} v={v} live={liveSlots.has(m.slotId)} compact={compact} />
-                    ))}
-                  </>
-                )}
+                {i === cols.length - 1 &&
+                  trailing.map((t) => (
+                    <div key={t.title}>
+                      <div className="t-xs board-dim mt-[2vh] uppercase tracking-widest">{t.title}</div>
+                      <div className="mt-[1.2vh] flex flex-col gap-[1.2vh]">
+                        {t.matches.map((m) => (
+                          <Cell key={m.id} m={m} v={v} live={liveSlots.has(m.slotId)} compact={compact} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
               </div>
             );
           })}
@@ -153,9 +161,12 @@ function BoardBracket({
 
   return (
     <div className="flex flex-col gap-[3vh]">
-      {row(double ? "Winners bracket" : null, winners, third.length > 0 ? { title: "3rd place", matches: third } : null)}
-      {losers.length > 0 && row("Losers bracket", losers, null)}
-      {grandFinal.length > 0 && row(null, grandFinal, null)}
+      {row(double ? "Winners bracket" : null, winners, [
+        ...(third.length > 0 ? [{ title: "3rd place", matches: third }] : []),
+        ...places.map((m) => ({ title: m.placeLabel!, matches: [m] })),
+      ])}
+      {losers.length > 0 && row("Losers bracket", losers, [])}
+      {grandFinal.length > 0 && row(null, grandFinal, [])}
     </div>
   );
 }

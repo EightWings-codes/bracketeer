@@ -110,7 +110,7 @@ export default async function TeamPage({
           {missing.map((m) => (
             <MatchRow key={m.id} m={m} tableLabel={v.tableLabel(m.tableNo)} highlightId={team.id}>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
-                <div className="text-sm text-zinc-500">{m.slotLabel} — already played</div>
+                <div className="text-sm text-zinc-500">{m.placeLabel ?? m.slotLabel} — already played</div>
                 <ScoreForm
                   matchId={m.id}
                   slug={slug}
@@ -133,7 +133,7 @@ export default async function TeamPage({
             vs {nextMatch.teamAId === team.id ? nextMatch.labelB : nextMatch.labelA}
           </div>
           <div className="text-zinc-500">
-            {nextMatch.slotLabel} · {v.tableLabel(nextMatch.tableNo)} · ~
+            {nextMatch.placeLabel ?? nextMatch.slotLabel} · {v.tableLabel(nextMatch.tableNo)} · ~
             <LocalTime iso={nextMatch.projection.projectedStart.toISOString()} />
             {!v.manualRounds && nextMatch.projection.delaySec > 60 && <span className="ml-1 text-amber-600">({fmtDelay(nextMatch.projection.delaySec)})</span>}
           </div>
