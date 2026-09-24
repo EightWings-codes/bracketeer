@@ -77,6 +77,23 @@ export function orderTeams(teams: TeamRef[], rng: () => number): TeamRef[] {
   return [...seeded, ...shuffle(unseeded, rng)];
 }
 
+/**
+ * The group sizes snake seeding produces for a field that does not divide
+ * evenly — 9 into 2 gives [5, 4]. Derived from the seeding itself rather than
+ * a formula, so the planner and the validator can never disagree about which
+ * group holds the extra team.
+ */
+export function snakeGroupSizes(teamCount: number, groupCount: number): number[] {
+  if (groupCount < 1) return [];
+  const sizes = Array.from({ length: groupCount }, () => 0);
+  for (let i = 0; i < teamCount; i++) {
+    const row = Math.floor(i / groupCount);
+    const col = i % groupCount;
+    sizes[row % 2 === 0 ? col : groupCount - 1 - col]!++;
+  }
+  return sizes;
+}
+
 /** Snake-seed an ordered list into `groupCount` groups. */
 export function snakeGroups(ordered: TeamRef[], groupCount: number): TeamRef[][] {
   const groups: TeamRef[][] = Array.from({ length: groupCount }, () => []);
@@ -321,14 +338,17 @@ export function generatePlan(
       });
     });
 
-    const size = groupTeams[0]!.length;
-    const rounds = roundRobinRounds(size);
-    rounds.forEach((pairs, r) => {
+    // Each group gets its own round robin: with uneven groups the bigger one
+    // simply has rounds the smaller one has already finished, and those later
+    // rounds are shorter rather than missing.
+    const perGroup = groupTeams.map((ts) => roundRobinRounds(ts.length));
+    const roundCount = Math.max(0, ...perGroup.map((r) => r.length));
+    for (let r = 0; r < roundCount; r++) {
       // Round r of every group at once; no team appears twice in this set.
       const roundMatches: Array<Omit<PlanMatch, "slotIndex" | "tableNo">> = [];
       groups.forEach((g, gi) => {
         const ts = groupTeams[gi]!;
-        for (const [a, b] of pairs) {
+        for (const [a, b] of perGroup[gi]![r] ?? []) {
           roundMatches.push({
             key: `m${++matchNo}`,
             groupKey: g.key,
@@ -337,13 +357,14 @@ export function generatePlan(
           });
         }
       });
+      if (roundMatches.length === 0) continue;
       const parts = chunk(roundMatches, tableCount);
       parts.forEach((part, pi) => {
         const suffix = parts.length > 1 ? ` (${pi + 1}/${parts.length})` : "";
         const si = pushSlot(`Group round ${r + 1}${suffix}`, "GROUP");
         part.forEach((m, ti) => matches.push({ ...m, slotIndex: si, tableNo: ti + 1 }));
       });
-    });
+    }
   }
 
   /** One knockout round → slots of `tableCount` matches. Returns match keys. */

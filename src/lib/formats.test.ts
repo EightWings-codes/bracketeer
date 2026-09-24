@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   customFormat,
+  describeGroups,
   describeCustom,
   groupOptions,
   playoffLabel,
@@ -8,16 +9,73 @@ import {
   qualifierCount,
   validateFormat,
 } from "@/lib/formats";
-import { generatePlan } from "@/lib/bracket";
+import { generatePlan, snakeGroupSizes } from "@/lib/bracket";
 import { seededRng } from "@/lib/rng";
 
 const teams = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ id: `t${i + 1}`, name: `Team ${i + 1}`, seed: null }));
 
 describe("groupOptions", () => {
-  it("offers only layouts that divide the field evenly", () => {
-    expect(groupOptions(12)).toEqual([1, 2, 3, 4, 6]);
-    expect(groupOptions(7)).toEqual([1]);
+  it("offers every layout that leaves no group below two teams", () => {
+    expect(groupOptions(12)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(groupOptions(7)).toEqual([1, 2, 3]);
+  });
+
+  it("offers uneven layouts for a field that does not divide", () => {
+    // 9 teams: one table, 5+4, or 3+3+3, or 3+2+2+2.
+    expect(groupOptions(9)).toEqual([1, 2, 3, 4]);
+    expect(snakeGroupSizes(9, 2)).toEqual([5, 4]);
+    expect(snakeGroupSizes(9, 3)).toEqual([3, 3, 3]);
+  });
+});
+
+describe("nine teams, groups of 5 and 4", () => {
+  const nine = { teamCount: 9, groupCount: 2 };
+
+  it("is a legal format all the way to the final", () => {
+    for (const playoffSize of [0, 2, 4, 8]) {
+      const f = customFormat({ ...nine, playoffSize });
+      expect(validateFormat(f, 9)).toBeNull();
+    }
+    expect(playoffOptions(9, 2)).toEqual([0, 2, 4, 8]);
+  });
+
+  it("reads back as the two group sizes", () => {
+    expect(describeGroups(9, 2)).toBe("2 groups — 1 of 5 and 1 of 4");
+    expect(describeCustom({ ...nine, playoffSize: 4 })).toBe(
+      "9 teams · 2 groups — 1 of 5 and 1 of 4 · top 2 · semi-finals",
+    );
+  });
+
+  it("takes the smallest group as the limit on who advances", () => {
+    // Top 4 of each is 8 — the group of 4 can just supply it.
+    expect(customFormat({ ...nine, playoffSize: 8 })).toMatchObject({ groupSize: 4, advancePerGroup: 4, wildcards: 0 });
+    // A config that asks a group for more than it holds is refused, however it
+    // was arrived at — here 4 groups (3, 2, 2, 2) asked for their top 3.
+    const tooGreedy = { ...customFormat({ teamCount: 9, groupCount: 4, playoffSize: 8 }), advancePerGroup: 3, wildcards: 4 };
+    expect(validateFormat(tooGreedy, 9)).toMatch(/smallest group/);
+  });
+
+  it("plans a full round robin in each group and a knockout after it", () => {
+    const plan = generatePlan(customFormat({ ...nine, playoffSize: 4 }), teams(9), 2, seededRng(5));
+    expect(plan.groups.map((g) => g.teamIds.length)).toEqual([5, 4]);
+
+    const group = plan.matches.filter((m) => m.groupKey !== null);
+    // Every pair inside a group meets exactly once: C(5,2) + C(4,2).
+    expect(group).toHaveLength(10 + 6);
+    const pairs = group.map((m) =>
+      [(m.sourceA as { teamId: string }).teamId, (m.sourceB as { teamId: string }).teamId].sort().join("|"),
+    );
+    expect(new Set(pairs).size).toBe(16);
+
+    // The bigger group keeps playing after the smaller one is done, and no
+    // team is ever drawn twice in the same round.
+    for (const slot of plan.slots) {
+      const inSlot = plan.matches.filter((m) => m.slotIndex === slot.index);
+      const sides = inSlot.flatMap((m) => [m.sourceA, m.sourceB]).filter((x) => x.kind === "TEAM");
+      expect(new Set(sides.map((x) => (x as { teamId: string }).teamId)).size).toBe(sides.length);
+    }
+    expect(plan.matches.filter((m) => m.groupKey === null)).toHaveLength(3);
   });
 });
 

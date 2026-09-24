@@ -2,6 +2,7 @@
  * Declarative tournament format presets. One generic generator (bracket.ts)
  * consumes a FormatConfig; adding a format is adding a row here.
  */
+import { snakeGroupSizes } from "./bracket";
 import { ordinal } from "./text";
 
 export interface FormatConfig {
@@ -11,7 +12,12 @@ export interface FormatConfig {
   teamCount: number | null;
   /** 0 = no group stage (pure knockout). */
   groupCount: number;
-  /** Ignored when teamCount is null (derived from the field). */
+  /**
+   * The *smallest* group. Groups need not be equal: a field that does not
+   * divide evenly is snake-seeded into groups whose sizes differ by one
+   * (9 teams in 2 groups is 5 and 4), and the smallest is what everything has
+   * to fit — nothing may ask a group for more teams than it holds.
+   */
   groupSize: number;
   /** Teams per group that advance to the knockout. 0 = no knockout. */
   advancePerGroup: number;
@@ -188,7 +194,7 @@ export interface CustomFormatInput {
 export function customFormat(input: CustomFormatInput): FormatConfig {
   const { teamCount, groupCount, playoffSize } = input;
   const elimination = input.elimination ?? "SINGLE";
-  const groupSize = groupCount > 0 ? Math.floor(teamCount / groupCount) : 0;
+  const groupSize = groupCount > 0 ? Math.min(...snakeGroupSizes(teamCount, groupCount)) : 0;
   const advancePerGroup = groupCount > 0 ? Math.floor(playoffSize / groupCount) : 0;
   const wildcards = groupCount > 0 ? playoffSize - advancePerGroup * groupCount : 0;
   return {
@@ -212,8 +218,7 @@ export function describeCustom(input: CustomFormatInput & { elimination?: Elimin
     parts.push(input.elimination === "DOUBLE" ? "double elimination" : "single elimination");
     return parts.join(" · ");
   }
-  const groupSize = Math.floor(teamCount / groupCount);
-  parts.push(groupCount === 1 ? `one table of ${groupSize}` : `${groupCount} groups of ${groupSize}`);
+  parts.push(describeGroups(teamCount, groupCount));
   if (playoffSize === 0) {
     parts.push("no playoff");
     return parts.join(" · ");
@@ -223,6 +228,26 @@ export function describeCustom(input: CustomFormatInput & { elimination?: Elimin
   parts.push(describeQualifiers(advance, wildcards));
   parts.push(playoffLabel(playoffSize).toLowerCase());
   return parts.join(" · ");
+}
+
+/** "3 groups of 4", "one table of 9", "2 groups — 1 of 5 and 1 of 4". */
+export function describeGroups(teamCount: number, groupCount: number): string {
+  if (groupCount === 1) return `one table of ${teamCount}`;
+  const sizes = snakeGroupSizes(teamCount, groupCount);
+  const big = Math.max(...sizes);
+  const small = Math.min(...sizes);
+  if (big === small) return `${groupCount} groups of ${big}`;
+  // Uneven: name both sizes, because which group a team lands in matters.
+  const bigCount = sizes.filter((n) => n === big).length;
+  return `${groupCount} groups — ${bigCount} of ${big} and ${groupCount - bigCount} of ${small}`;
+}
+
+/** Chip-sized: "One table of 9" · "3 × 4" · "5 + 4". */
+export function describeGroupsShort(teamCount: number, groupCount: number): string {
+  if (groupCount === 1) return `One table of ${teamCount}`;
+  const sizes = snakeGroupSizes(teamCount, groupCount);
+  const even = Math.min(...sizes) === Math.max(...sizes);
+  return even ? `${groupCount} × ${sizes[0]}` : sizes.join(" + ");
 }
 
 function describeQualifiers(advance: number, wildcards: number): string {
@@ -273,11 +298,14 @@ export function customInputOf(c: FormatConfig, teamCount: number): CustomFormatI
   };
 }
 
-/** Group layouts that divide the field evenly, largest groups first. */
+/**
+ * Group layouts worth offering. A field that does not divide evenly is not
+ * excluded — 9 teams can be one table of 9, or two groups of 5 and 4.
+ */
 export function groupOptions(teamCount: number): number[] {
   const out: number[] = [];
   for (let g = 1; g <= Math.floor(teamCount / 2); g++) {
-    if (teamCount % g === 0) out.push(g);
+    if (Math.min(...snakeGroupSizes(teamCount, g)) >= 2) out.push(g);
   }
   return out;
 }
@@ -288,13 +316,13 @@ export function groupOptions(teamCount: number): number[] {
  */
 export function playoffOptions(teamCount: number, groupCount: number): number[] {
   const out = [0];
-  const groupSize = groupCount > 0 ? Math.floor(teamCount / groupCount) : 0;
+  const smallest = groupCount > 0 ? Math.min(...snakeGroupSizes(teamCount, groupCount)) : 0;
   for (let q = 2; q <= teamCount; q *= 2) {
     if (groupCount === 0) {
       if (q === teamCount) out.push(q);
       continue;
     }
-    if (Math.floor(q / groupCount) > groupSize) continue;
+    if (Math.floor(q / groupCount) > smallest) continue;
     out.push(q);
   }
   return out;
@@ -319,8 +347,8 @@ export function validateFormat(c: FormatConfig, teamCount: number): string | nul
   if (teamCount !== c.teamCount) {
     return `This format needs exactly ${c.teamCount} confirmed teams (you have ${teamCount}).`;
   }
-  if (c.groupCount > 0 && c.groupCount * c.groupSize !== teamCount) {
-    return "Group layout does not match the team count.";
+  if (c.groupCount > 0 && Math.min(...snakeGroupSizes(teamCount, c.groupCount)) < 2) {
+    return "That many groups would leave a group with a single team.";
   }
   if (eliminationOf(c) === "DOUBLE") {
     if (c.groupCount > 0) return "Double elimination does not take a group stage.";
@@ -332,8 +360,8 @@ export function validateFormat(c: FormatConfig, teamCount: number): string | nul
   if (q > 0 && !isPowerOfTwo(q)) {
     return `Knockout needs a power of two entrants, got ${q}.`;
   }
-  if (c.groupCount > 0 && c.advancePerGroup > c.groupSize) {
-    return "More teams advance than fit in a group.";
+  if (c.groupCount > 0 && c.advancePerGroup > Math.min(...snakeGroupSizes(teamCount, c.groupCount))) {
+    return "More teams advance than fit in the smallest group.";
   }
   return null;
 }

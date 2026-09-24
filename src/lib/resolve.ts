@@ -6,7 +6,7 @@
  * reported, in which case it is flagged out of sync for the admin.
  */
 import {
-  compareRows,
+  compareAcrossGroups,
   computeStandings,
   type ScoringRules,
   type StandingRow,
@@ -95,7 +95,7 @@ export function resolveSources(input: ResolveInput): ResolveResult {
     wildcards = input.groups
       .map((g) => standings.get(g.id)!.find((r) => r.position === input.wildcardPosition))
       .filter((r): r is StandingRow => !!r)
-      .sort((a, b) => compareRows(a, b) || a.name.localeCompare(b.name));
+      .sort((a, b) => compareAcrossGroups(a, b) || a.name.localeCompare(b.name));
   }
 
   const resolve = (

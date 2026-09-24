@@ -8,6 +8,7 @@ import {
   customInputOf,
   describeCustom,
   describeFormat,
+  describeGroupsShort,
   findPreset,
   groupOptions,
   isPowerOfTwo,
@@ -151,7 +152,7 @@ export default async function FormatPage({
               )}
               {layouts.map((g) => (
                 <Chip key={g} href={build({ groups: g })} on={groupCount === g}>
-                  {g === 1 ? `One table of ${teamCount}` : `${g} × ${teamCount / g}`}
+                  {describeGroupsShort(teamCount, g)}
                 </Chip>
               ))}
             </Choice>

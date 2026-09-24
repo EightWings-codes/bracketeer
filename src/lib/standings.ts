@@ -163,3 +163,19 @@ export function computeStandings(
 export function compareRows(a: StandingRow, b: StandingRow): number {
   return b.points - a.points || b.diff - a.diff || b.scoreFor - a.scoreFor;
 }
+
+/**
+ * Compare two rows that come from *different* groups — the wildcard pool.
+ * Groups need not be the same size (9 teams split 5 and 4), and a team with
+ * one more match behind it would otherwise carry more points for the same
+ * form, so once the match counts differ everything is read per match played.
+ */
+export function compareAcrossGroups(a: StandingRow, b: StandingRow): number {
+  if (a.played === b.played) return compareRows(a, b);
+  const per = (value: number, played: number) => (played > 0 ? value / played : 0);
+  return (
+    per(b.points, b.played) - per(a.points, a.played) ||
+    per(b.diff, b.played) - per(a.diff, a.played) ||
+    per(b.scoreFor, b.played) - per(a.scoreFor, a.played)
+  );
+}
