@@ -30,7 +30,10 @@ export default async function TeamPage({
   const nowIso = v.now.toISOString();
 
   const mine = v.matches.filter((m) => m.teamAId === team.id || m.teamBId === team.id);
-  const current = mine.filter((m) => m.projection.state === "running" && m.status !== "CONFIRMED");
+  const open = (m: (typeof mine)[number]) => m.status !== "CONFIRMED" && m.status !== "VOID";
+  const current = mine.filter((m) => m.projection.state === "running" && open(m));
+  // Rounds that are over but never got a result — the team can still enter it.
+  const missing = mine.filter((m) => m.projection.state === "done" && open(m));
   const nextMatch = mine.find((m) => m.projection.state === "upcoming");
   const done = mine.filter((m) => m.status === "CONFIRMED");
   const group = team.groupId ? v.groups.find((g) => g.id === team.groupId) : null;
@@ -90,6 +93,33 @@ export default async function TeamPage({
                     askName={false}
                   />
                 )}
+              </div>
+            </MatchRow>
+          ))}
+        </section>
+      )}
+
+      {missing.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">
+            Still to enter
+            <span className="ml-2 text-sm font-normal text-amber-600">
+              {missing.length === 1 ? "one result is missing" : `${missing.length} results are missing`}
+            </span>
+          </h2>
+          {missing.map((m) => (
+            <MatchRow key={m.id} m={m} tableLabel={v.tableLabel(m.tableNo)} highlightId={team.id}>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                <div className="text-sm text-zinc-500">{m.slotLabel} — already played</div>
+                <ScoreForm
+                  matchId={m.id}
+                  slug={slug}
+                  teamA={m.labelA}
+                  teamB={m.labelB}
+                  teamToken={token}
+                  scoreLabel={v.scoreLabel}
+                  askName={false}
+                />
               </div>
             </MatchRow>
           ))}

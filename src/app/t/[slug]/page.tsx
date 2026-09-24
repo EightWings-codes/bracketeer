@@ -28,15 +28,14 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
   // Registering (or opening a private link) leaves a token cookie behind, so
   // a player lands on their own match instead of hunting for it.
   const me = await rememberedTeam(slug, v.id);
+  const mine = me ? v.matches.filter((m) => m.teamAId === me.id || m.teamBId === me.id) : [];
+  const unsettled = (m: (typeof mine)[number]) => m.status !== "CONFIRMED" && m.status !== "VOID";
+  // What this team should be looking at: the match they are playing, else one
+  // they finished and never reported, else the one coming up.
   const myMatch = me
-    ? v.matches.find(
-        (m) =>
-          (m.teamAId === me.id || m.teamBId === me.id) &&
-          m.status !== "CONFIRMED" &&
-          m.status !== "VOID" &&
-          v.running.some((r) => r.id === m.slotId),
-      ) ??
-      v.matches.find((m) => (m.teamAId === me.id || m.teamBId === me.id) && m.status === "SCHEDULED")
+    ? (mine.find((m) => unsettled(m) && v.running.some((r) => r.id === m.slotId)) ??
+      mine.find((m) => unsettled(m) && m.projection.state === "done") ??
+      mine.find((m) => m.status === "SCHEDULED"))
     : undefined;
   const knockout = v.matches.filter((m) => m.stage !== "GROUP");
 
@@ -91,18 +90,28 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
                 art={v.iconArt}
                 iconFor={(id) => (id ? v.teamIcon.get(id) ?? null : null)}
               >
-                {state === "running" && v.openScoring && m.status !== "CONFIRMED" && m.teamAId && m.teamBId && (
-                  <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                    <ScoreForm
-                      matchId={m.id}
-                      slug={slug}
-                      teamA={m.labelA}
-                      teamB={m.labelB}
-                      scoreLabel={v.scoreLabel}
-                      askName
-                    />
-                  </div>
-                )}
+                {/* A round being over is no reason to hide the box: a game
+                    nobody entered while it ran still needs its result. */}
+                {(state === "running" || state === "done") &&
+                  v.openScoring &&
+                  m.status !== "CONFIRMED" &&
+                  m.status !== "VOID" &&
+                  m.teamAId &&
+                  m.teamBId && (
+                    <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                      {state === "done" && m.status === "SCHEDULED" && (
+                        <p className="mb-2 text-xs font-medium text-amber-600">This result is still missing.</p>
+                      )}
+                      <ScoreForm
+                        matchId={m.id}
+                        slug={slug}
+                        teamA={m.labelA}
+                        teamB={m.labelB}
+                        scoreLabel={v.scoreLabel}
+                        askName
+                      />
+                    </div>
+                  )}
               </LiveMatch>
             ))}
           </div>
@@ -267,6 +276,9 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
           tableLabel={v.tableLabel}
           scoreLabel={v.scoreLabel}
           live={Boolean(myMatch && v.running.some((r) => r.id === myMatch.slotId))}
+          canReport={Boolean(
+            myMatch && myMatch.projection.state !== "upcoming" && unsettled(myMatch) && myMatch.teamAId && myMatch.teamBId,
+          )}
         />
       )}
 

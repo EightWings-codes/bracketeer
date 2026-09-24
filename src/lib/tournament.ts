@@ -547,7 +547,9 @@ export async function submitScoreReport(matchId: string, input: ReportInput) {
   if (match.status === "CONFIRMED") fail("This match is already confirmed.");
   if (match.status === "VOID") fail("This match was voided.");
   if (!match.teamAId || !match.teamBId) fail("Teams for this match aren't decided yet.");
-  if (!match.slot.startedAt) fail("This round hasn't started yet.");
+  // A round that is over still takes results — someone has to be able to type
+  // in the score of a game that nobody got round to entering while it ran.
+  if (!match.slot.startedAt && !match.slot.endedAt) fail("This round hasn't started yet.");
 
   let reportedForTeamId: string | null = null;
   if (input.teamToken) {

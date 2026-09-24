@@ -16,6 +16,7 @@ export default function YouAre({
   tableLabel,
   scoreLabel,
   live,
+  canReport,
 }: {
   slug: string;
   team: { id: string; name: string; token: string; status: string };
@@ -24,6 +25,9 @@ export default function YouAre({
   scoreLabel: string;
   /** The match is on a round that has actually started. */
   live: boolean;
+  /** The round has started or finished and the result is still open, so the
+   *  box is shown — a game that ran without anyone entering it still counts. */
+  canReport: boolean;
 }) {
   const opponent = match ? (match.teamAId === team.id ? match.labelB : match.labelA) : null;
 
@@ -52,9 +56,10 @@ export default function YouAre({
           <p className="text-sm">
             <span className="font-medium">{tableLabel(match.tableNo)}</span> vs{" "}
             <span className="font-medium">{opponent}</span>
-            {!live && <span className="text-zinc-500"> · not started yet</span>}
+            {!live && canReport && <span className="text-amber-600"> · result still missing</span>}
+            {!live && !canReport && <span className="text-zinc-500"> · not started yet</span>}
           </p>
-          {live && match.status !== "CONFIRMED" && (
+          {canReport && (
             <div className="mt-2">
               <ScoreForm
                 matchId={match.id}
