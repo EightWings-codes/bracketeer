@@ -43,8 +43,11 @@ export default function Bracket({
   // Single elimination plays 3rd place alongside the final, so it shares the
   // final's slot and is told apart by its source: the losers of the semis.
   const third = double ? [] : matches.filter((m) => m.sourceAKind === "LOSER");
+  // Games for 5th, 7th … share the knockout's rounds but are not part of its
+  // tree — drawing them as a column would invent a bracket nobody plays.
+  const places = matches.filter((m) => m.placeLabel);
   const winners = matches.filter(
-    (m) => m.stage !== "LOSERS" && m.stage !== "GRAND_FINAL" && !third.includes(m),
+    (m) => m.stage !== "LOSERS" && m.stage !== "GRAND_FINAL" && !third.includes(m) && !places.includes(m),
   );
 
   return (
@@ -58,6 +61,16 @@ export default function Bracket({
           third.length > 0 ? { title: "3rd place", matches: third } : null
         }
       />
+      {places.length > 0 && (
+        <div className="flex flex-wrap gap-6">
+          {places.map((m) => (
+            <div key={m.id} className="w-56">
+              <div className="mb-1 text-xs uppercase text-zinc-500">{m.placeLabel}</div>
+              <Cell m={m} tableLabel={tableLabel} highlightId={highlightId} />
+            </div>
+          ))}
+        </div>
+      )}
       {losers.length > 0 && (
         <Row label="Losers bracket" columns={bracketColumns(losers)} tableLabel={tableLabel} highlightId={highlightId} />
       )}

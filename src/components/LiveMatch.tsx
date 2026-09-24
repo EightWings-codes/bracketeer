@@ -61,7 +61,7 @@ export default function LiveMatch({
       <div className="mb-2 flex items-center justify-between gap-2 text-xs text-zinc-500">
         <span className="truncate">
           <span className="font-medium text-zinc-700 dark:text-zinc-300">{tableLabel}</span>
-          {m.groupName ? ` · ${m.groupName}` : ""} · {m.slotLabel}
+          {m.groupName ? ` · ${m.groupName}` : ""} · {m.placeLabel ?? m.slotLabel}
         </span>
         <StatusBadge value={m.status} />
       </div>

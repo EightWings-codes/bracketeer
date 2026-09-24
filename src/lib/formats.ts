@@ -25,6 +25,11 @@ export interface FormatConfig {
   wildcards: number;
   thirdPlaceMatch: boolean;
   /**
+   * Give the teams that missed the playoff someone to play: with two groups
+   * the 3rd of each meet for 5th place, the 4ths for 7th, and so on down.
+   */
+  placementGames?: boolean;
+  /**
    * Knockout style. DOUBLE adds a losers bracket and a grand final: you are
    * out after two defeats. Omitted on older stored snapshots — treat as SINGLE.
    */
@@ -181,6 +186,8 @@ export interface CustomFormatInput {
   /** Teams that reach the knockout — 0 = groups only, no playoff. */
   playoffSize: number;
   thirdPlaceMatch?: boolean;
+  /** Play out 5th, 7th … between the groups' remaining teams. Two groups only. */
+  placementGames?: boolean;
   elimination?: Elimination;
 }
 
@@ -206,6 +213,7 @@ export function customFormat(input: CustomFormatInput): FormatConfig {
     advancePerGroup,
     wildcards,
     thirdPlaceMatch: input.thirdPlaceMatch ?? false,
+    placementGames: input.placementGames ?? false,
     elimination,
   };
 }
@@ -227,6 +235,7 @@ export function describeCustom(input: CustomFormatInput & { elimination?: Elimin
   const wildcards = playoffSize - advance * groupCount;
   parts.push(describeQualifiers(advance, wildcards));
   parts.push(playoffLabel(playoffSize).toLowerCase());
+  if (input.placementGames) parts.push("places below played out");
   return parts.join(" · ");
 }
 
@@ -240,6 +249,19 @@ export function describeGroups(teamCount: number, groupCount: number): string {
   // Uneven: name both sizes, because which group a team lands in matters.
   const bigCount = sizes.filter((n) => n === big).length;
   return `${groupCount} groups — ${bigCount} of ${big} and ${groupCount - bigCount} of ${small}`;
+}
+
+/**
+ * The places still worth playing for below the playoff: with two groups the
+ * teams ranked r in each meet for place 2r−1 — 3rd vs 3rd is the 5th-place
+ * game, 4th vs 4th the 7th. Stops where the smaller group runs out.
+ */
+export function placementRanks(c: FormatConfig, teamCount: number): Array<{ rank: number; place: number }> {
+  if (!c.placementGames || c.groupCount !== 2) return [];
+  const smallest = Math.min(...snakeGroupSizes(teamCount, 2));
+  const out: Array<{ rank: number; place: number }> = [];
+  for (let rank = c.advancePerGroup + 1; rank <= smallest; rank++) out.push({ rank, place: 2 * rank - 1 });
+  return out;
 }
 
 /** Chip-sized: "One table of 9" · "3 × 4" · "5 + 4". */
@@ -294,6 +316,7 @@ export function customInputOf(c: FormatConfig, teamCount: number): CustomFormatI
     groupCount: c.groupCount,
     playoffSize: c.groupCount === 0 ? (c.teamCount ?? teamCount) : qualifierCount(c, teamCount),
     thirdPlaceMatch: c.thirdPlaceMatch,
+    placementGames: c.placementGames ?? false,
     elimination: eliminationOf(c),
   };
 }
@@ -362,6 +385,10 @@ export function validateFormat(c: FormatConfig, teamCount: number): string | nul
   }
   if (c.groupCount > 0 && c.advancePerGroup > Math.min(...snakeGroupSizes(teamCount, c.groupCount))) {
     return "More teams advance than fit in the smallest group.";
+  }
+  if (c.placementGames) {
+    if (c.groupCount !== 2) return "Places below the playoff can only be played out with two groups.";
+    if (qualifierCount(c, teamCount) < 2) return "Places below the playoff need a playoff above them.";
   }
   return null;
 }

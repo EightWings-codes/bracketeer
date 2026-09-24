@@ -23,7 +23,7 @@ import { randomSeed, seededRng } from "@/lib/rng";
 import { confirmedTeamRefs } from "@/lib/tournament";
 import { parseStageTiming, planDurationSec, slotTimings } from "@/lib/stage-timing";
 import ActionForm from "@/components/ActionForm";
-import { generatePlanAction, redrawAction } from "../actions";
+import { generatePlanAction, redrawAction, replanPlayoffAction } from "../actions";
 
 const CHIP = "rounded-lg border px-3 py-1.5 text-sm";
 const CHIP_ON = "border-emerald-500 bg-emerald-50 font-medium dark:bg-emerald-950/40";
@@ -43,6 +43,7 @@ export default async function FormatPage({
     playoff?: string;
     third?: string;
     elim?: string;
+    places?: string;
   }>;
 }) {
   const { slug } = await params;
@@ -54,6 +55,14 @@ export default async function FormatPage({
   const fitting = new Set(presetsFor(teamCount).map((p) => p.id));
   const hasPlan = t._count.slots > 0;
   const started = hasPlan && (await prisma.slot.count({ where: { tournamentId: t.id, startedAt: { not: null } } })) > 0;
+  // Once the group stage is under way the whole plan can no longer be redrawn,
+  // but the playoff hanging off it still can — until the playoff itself starts.
+  const playoffStarted =
+    hasPlan &&
+    (await prisma.slot.count({
+      where: { tournamentId: t.id, stage: { not: "GROUP" }, OR: [{ startedAt: { not: null } }, { endedAt: { not: null } }] },
+    })) > 0;
+  const canReplanPlayoff = started && !playoffStarted && (await prisma.group.count({ where: { tournamentId: t.id } })) > 0;
   const stageTiming = parseStageTiming(t.stageTiming);
 
   // --- what is being previewed -------------------------------------------
@@ -76,6 +85,7 @@ export default async function FormatPage({
     openOn && playoffs.includes(openOn.playoffSize) ? openOn.playoffSize : (playoffs[playoffs.length - 1] ?? 0),
   );
   const thirdPlace = building ? sp.third === "1" : (sp.third === "1" || Boolean(openOn?.thirdPlaceMatch));
+  const places = groupCount === 2 && (building ? sp.places === "1" : sp.places === "1" || Boolean(openOn?.placementGames));
   // Double elimination replaces the single-elimination playoff; it takes no
   // group stage and no third-place match, so it is only offered on its own.
   const double =
@@ -83,7 +93,14 @@ export default async function FormatPage({
     groupCount === 0 &&
     straightKnockout;
 
-  const customInput = { teamCount, groupCount, playoffSize, thirdPlaceMatch: thirdPlace && !double, elimination: double ? ("DOUBLE" as const) : ("SINGLE" as const) };
+  const customInput = {
+    teamCount,
+    groupCount,
+    playoffSize,
+    thirdPlaceMatch: thirdPlace && !double,
+    placementGames: places && !double,
+    elimination: double ? ("DOUBLE" as const) : ("SINGLE" as const),
+  };
   const custom: FormatConfig | null = teamCount >= 2 ? customFormat(customInput) : null;
 
   // Show something from the first visit: the builder's own default when this
@@ -105,12 +122,13 @@ export default async function FormatPage({
   }
   const nameOf = new Map(teams.map((x) => [x.id, x.name]));
 
-  const build = (patch: Partial<{ groups: number; playoff: number; third: boolean; double: boolean; seed: number }>) => {
+  const build = (patch: Partial<{ groups: number; playoff: number; third: boolean; double: boolean; places: boolean; seed: number }>) => {
     const q = new URLSearchParams({
       groups: String(patch.groups ?? groupCount),
       playoff: String(patch.playoff ?? playoffSize),
       third: (patch.third ?? thirdPlace) ? "1" : "0",
       elim: (patch.double ?? double) ? "DOUBLE" : "SINGLE",
+      places: (patch.places ?? places) ? "1" : "0",
       seed: String(patch.seed ?? seed),
     });
     return `/admin/${slug}/format?${q}`;
@@ -172,6 +190,11 @@ export default async function FormatPage({
               <Chip href={build({ third: !thirdPlace })} on={thirdPlace && !double}>
                 {thirdPlace && !double ? "✓ " : ""}3rd place match
               </Chip>
+              {groupCount === 2 && playoffSize >= 2 && (
+                <Chip href={build({ places: !places })} on={places}>
+                  {places ? "✓ " : ""}Play out 5th, 7th …
+                </Chip>
+              )}
               {groupCount === 0 && straightKnockout && (
                 <Chip href={build({ double: !double })} on={double}>
                   {double ? "✓ " : ""}Double elimination
@@ -244,11 +267,28 @@ export default async function FormatPage({
                     groupCount: previewFormat.id === CUSTOM_ID ? groupCount : undefined,
                     playoffSize: previewFormat.id === CUSTOM_ID ? playoffSize : undefined,
                     thirdPlace: previewFormat.id === CUSTOM_ID ? (thirdPlace && !double ? "true" : "false") : undefined,
+                    places: previewFormat.id === CUSTOM_ID ? (places && !double ? "true" : "false") : undefined,
                     elimination: previewFormat.id === CUSTOM_ID ? (double ? "DOUBLE" : "SINGLE") : undefined,
                     force: started ? "true" : undefined,
                   }}
-                  submitLabel={hasPlan ? (started ? "⚠ Force regenerate" : "Replace plan") : "Generate plan"}
+                  submitLabel={hasPlan ? (started ? "⚠ Force regenerate (wipes results)" : "Replace plan") : "Generate plan"}
                   variant={started ? "danger" : "primary"}
+                  inline
+                />
+              )}
+              {canReplanPlayoff && previewFormat.id === CUSTOM_ID && !problem && (
+                <ActionForm
+                  action={replanPlayoffAction}
+                  hidden={{
+                    slug,
+                    formatId: CUSTOM_ID,
+                    groupCount,
+                    playoffSize,
+                    thirdPlace: thirdPlace && !double ? "true" : "false",
+                    places: places && !double ? "true" : "false",
+                  }}
+                  submitLabel="Re-plan the playoff only"
+                  pendingLabel="Re-planning…"
                   inline
                 />
               )}
@@ -273,6 +313,13 @@ export default async function FormatPage({
             </>
           )}
         </section>
+      )}
+
+      {canReplanPlayoff && (
+        <p className="rounded-xl border border-indigo-300 bg-indigo-50 p-3 text-sm dark:border-indigo-900 dark:bg-indigo-950/40">
+          The group stage is running, so the draw is fixed — but the playoff above it is not. Pick the shape you want and
+          use <strong>Re-plan the playoff only</strong>: groups, results and the rounds already played stay untouched.
+        </p>
       )}
 
       {hasPlan && !started && (

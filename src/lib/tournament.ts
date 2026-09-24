@@ -9,7 +9,7 @@ import type { PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma";
 import { APP } from "./config";
 import { generatePlan, packGroupStage, type PlanSource, type Stage, type TeamRef } from "./bracket";
-import { findPreset, type FormatConfig } from "./formats";
+import { findPreset, validateFormat, type FormatConfig } from "./formats";
 import { randomSeed, seededRng } from "./rng";
 import { normaliseMembers, rosterProblem, sizeBoundsProblem } from "./roster";
 import { findTheme, isValidIcon, pickIcon } from "./themes";
@@ -816,6 +816,115 @@ export async function repackUpcomingRounds(tournamentId: string, actorId: string
   });
 
   return result;
+}
+
+/**
+ * Replace the playoff without touching the group stage.
+ *
+ * Mid-tournament the draw cannot be re-run — regenerating wipes the groups and
+ * every result with them — but the shape of the playoff is exactly the thing an
+ * organiser wants to change once they see how the day is going: quarter-finals
+ * or straight to the semis, places below played out or not.
+ *
+ * The group stage, its results and its rounds stay exactly as they are. Only
+ * knockout rounds are replaced, and only while none of them has started.
+ */
+export async function replanPlayoff(
+  tournamentId: string,
+  config: FormatConfig,
+  actorId: string,
+) {
+  const t = await getTournament(prisma, tournamentId);
+  const [groups, slots, teams] = await Promise.all([
+    prisma.group.findMany({ where: { tournamentId }, orderBy: { order: "asc" } }),
+    prisma.slot.findMany({ where: { tournamentId }, orderBy: { index: "asc" }, include: { matches: true } }),
+    confirmedTeamRefs(prisma, tournamentId),
+  ]);
+  if (groups.length === 0) fail("This tournament has no group stage to build a playoff on.");
+
+  const knockout = slots.filter((s) => s.stage !== "GROUP");
+  const started = knockout.filter(
+    (s) => s.startedAt !== null || s.endedAt !== null || s.matches.some((m) => m.status !== "SCHEDULED"),
+  );
+  if (started.length > 0) fail("The playoff has already begun — it can't be re-planned now.");
+
+  const problem = validateFormat(config, teams.length);
+  if (problem) fail(problem);
+  if (config.groupCount !== groups.length) {
+    fail(`The draw has ${groups.length} groups; this format wants ${config.groupCount}.`);
+  }
+
+  // Build a fresh plan for the same field and read only its knockout off it —
+  // the group stage it produces is thrown away, so the real one is untouched.
+  const fresh = generatePlan(config, teams, t.tableCount, seededRng(t.drawSeed ?? 1));
+  const keyToGroupId = new Map(fresh.groups.map((g, i) => [g.key, groups[i]!.id]));
+  const freshKnockout = fresh.slots.filter((s) => s.stage !== "GROUP");
+  const groupSlots = slots.filter((s) => s.stage === "GROUP");
+  const baseIndex = Math.max(-1, ...groupSlots.map((s) => s.index)) + 1;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.match.deleteMany({ where: { tournamentId, slotId: { in: knockout.map((s) => s.id) } } });
+    await tx.slot.deleteMany({ where: { id: { in: knockout.map((s) => s.id) } } });
+
+    const slotIds = new Map<number, string>();
+    for (const [i, s] of freshKnockout.entries()) {
+      const row = await tx.slot.create({
+        data: { tournamentId, index: baseIndex + i, label: s.label, stage: s.stage },
+      });
+      slotIds.set(s.index, row.id);
+    }
+
+    const matchIds = new Map<string, string>();
+    const src = (x: PlanSource) => ({
+      kind: x.kind,
+      matchId: "matchKey" in x ? (matchIds.get(x.matchKey) ?? fail("Playoff references a later match.")) : null,
+      groupId: "groupKey" in x ? (keyToGroupId.get(x.groupKey) ?? null) : null,
+      rank: "rank" in x ? x.rank : null,
+      teamId: x.kind === "TEAM" ? x.teamId : null,
+    });
+    const ordered = fresh.matches
+      .filter((m) => slotIds.has(m.slotIndex))
+      .sort((a, b) => a.slotIndex - b.slotIndex || a.tableNo - b.tableNo);
+    for (const m of ordered) {
+      const a = src(m.sourceA);
+      const b = src(m.sourceB);
+      const row = await tx.match.create({
+        data: {
+          tournamentId,
+          slotId: slotIds.get(m.slotIndex)!,
+          tableNo: m.tableNo,
+          teamAId: a.teamId,
+          teamBId: b.teamId,
+          sourceAKind: a.kind,
+          sourceAMatchId: a.matchId,
+          sourceAGroupId: a.groupId,
+          sourceARank: a.rank,
+          sourceBKind: b.kind,
+          sourceBMatchId: b.matchId,
+          sourceBGroupId: b.groupId,
+          sourceBRank: b.rank,
+        },
+      });
+      matchIds.set(m.key, row.id);
+    }
+
+    await tx.tournament.update({
+      where: { id: tournamentId },
+      data: { formatId: config.id, formatConfig: config as unknown as Prisma.InputJsonValue },
+    });
+    await audit(tx, tournamentId, actorId, "plan.replanPlayoff", {
+      rounds: freshKnockout.length,
+      matches: ordered.length,
+      formatId: config.id,
+    });
+  });
+
+  // Fill in anyone already decided by a finished group.
+  await prisma.$transaction(async (tx) => {
+    await runResolve(tx, tournamentId);
+  });
+
+  return { rounds: freshKnockout.length, matches: fresh.matches.length - fresh.matches.filter((m) => m.groupKey).length };
 }
 
 export async function resetPlan(tournamentId: string, actorId: string) {

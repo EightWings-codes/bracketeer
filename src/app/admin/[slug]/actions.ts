@@ -24,6 +24,7 @@ import {
   generateTournamentPlan,
   newJoinCode,
   nudgeSlotClock,
+  replanPlayoff,
   repackUpcomingRounds,
   resetPlan,
   setStageTiming,
@@ -243,9 +244,17 @@ async function buildCustom(fd: FormData, tournamentId: string) {
     groupCount: need(num(fd, "groupCount"), "Pick a group layout."),
     playoffSize: need(num(fd, "playoffSize"), "Pick a playoff size."),
     thirdPlaceMatch: bool(fd, "thirdPlace") === true,
+    placementGames: bool(fd, "places") === true,
     elimination: str(fd, "elimination") === "DOUBLE" ? "DOUBLE" : "SINGLE",
   });
 }
+
+/** Re-shape the playoff of a tournament whose group stage is already running. */
+export const replanPlayoffAction = action(async (fd, adminId) => {
+  const id = await tournamentId(fd);
+  const r = await replanPlayoff(id, await buildCustom(fd, id), adminId);
+  return `Playoff re-planned: ${r.rounds} rounds, ${r.matches} matches.`;
+});
 
 export const updateStageTimingAction = action(async (fd, adminId) => {
   const id = await tournamentId(fd);

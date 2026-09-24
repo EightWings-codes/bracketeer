@@ -7,6 +7,7 @@ import {
   confirmMatch,
   createTournament,
   generateTournamentPlan,
+  replanPlayoff,
   setTournamentStatus,
   startSlot,
   stopSlot,
@@ -97,5 +98,72 @@ describe.skipIf(!RUN)("reporting a result after the round is over (integration)"
     const after = await prisma.match.findUniqueOrThrow({ where: { id: m.id }, include: { reports: { orderBy: { createdAt: "desc" } } } });
     expect(after.reports).toHaveLength(2);
     expect(after.status).toBe("REPORTED");
+  });
+});
+
+describe.skipIf(!RUN)("replanPlayoff (integration)", () => {
+  let tid: string;
+  let adminId: string;
+
+  beforeEach(async () => {
+    const built = await build();
+    tid = built.id;
+    adminId = built.adminId;
+  });
+
+  /** Play the whole group stage out, so the playoff has real teams to resolve. */
+  async function playGroups() {
+    const slots = await prisma.slot.findMany({ where: { tournamentId: tid, stage: "GROUP" }, orderBy: { index: "asc" }, include: { matches: true } });
+    for (const s of slots) {
+      await startSlot(s.id, adminId);
+      for (const [i, m] of s.matches.entries()) await confirmMatch(m.id, 10, i + 1, adminId);
+      await stopSlot(s.id, adminId);
+    }
+  }
+
+  it("swaps quarter-finals for semis plus places, leaving the groups alone", async () => {
+    const groupsBefore = await prisma.slot.findMany({ where: { tournamentId: tid, stage: "GROUP" }, orderBy: { index: "asc" }, include: { matches: true } });
+    await startSlot(groupsBefore[0]!.id, adminId);
+
+    await replanPlayoff(tid, customFormat({ teamCount: 9, groupCount: 2, playoffSize: 4, thirdPlaceMatch: true, placementGames: true }), adminId);
+
+    const after = await prisma.slot.findMany({ where: { tournamentId: tid }, orderBy: { index: "asc" }, include: { matches: true } });
+    const groupsAfter = after.filter((s) => s.stage === "GROUP");
+    expect(groupsAfter.map((s) => s.id)).toEqual(groupsBefore.map((s) => s.id));
+    expect(groupsAfter.flatMap((s) => s.matches.map((m) => m.id)).sort()).toEqual(
+      groupsBefore.flatMap((s) => s.matches.map((m) => m.id)).sort(),
+    );
+
+    // Three tables: semis + 7th place, then final + 3rd + 5th.
+    const knockout = after.filter((s) => s.stage !== "GROUP");
+    expect(knockout).toHaveLength(2);
+    expect(knockout.map((s) => s.matches.length)).toEqual([3, 3]);
+    expect(knockout[0]!.stage).toBe("SEMI");
+    expect(knockout[1]!.stage).toBe("FINAL");
+
+    // The extra game in each round is a placement game between equal ranks, and
+    // the lower place runs first: 7th beside the semis, 5th beside the final.
+    const placeRank = (s: (typeof knockout)[number]) =>
+      s.matches.find((m) => m.sourceAKind === "GROUP_RANK" && m.sourceARank === m.sourceBRank)?.sourceARank;
+    expect(placeRank(knockout[0]!)).toBe(4); // 7th place, with the semi-finals
+    expect(placeRank(knockout[1]!)).toBe(3); // 5th place, with the final
+  });
+
+  it("resolves the placement games once the groups are done", async () => {
+    await replanPlayoff(tid, customFormat({ teamCount: 9, groupCount: 2, playoffSize: 4, thirdPlaceMatch: true, placementGames: true }), adminId);
+    await playGroups();
+    const seventh = await prisma.match.findFirstOrThrow({
+      where: { tournamentId: tid, sourceARank: 4, sourceBRank: 4 },
+    });
+    expect(seventh.teamAId).not.toBeNull();
+    expect(seventh.teamBId).not.toBeNull();
+  });
+
+  it("refuses once the playoff itself has started", async () => {
+    const semi = await prisma.slot.findFirstOrThrow({ where: { tournamentId: tid, stage: { not: "GROUP" } }, orderBy: { index: "asc" } });
+    await prisma.slot.update({ where: { id: semi.id }, data: { startedAt: new Date() } });
+    await expect(
+      replanPlayoff(tid, customFormat({ teamCount: 9, groupCount: 2, playoffSize: 4 }), adminId),
+    ).rejects.toThrow(/already begun/);
   });
 });

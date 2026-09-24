@@ -4,7 +4,8 @@
  * layer (tournament.ts) resolves them as results come in.
  */
 import type { FormatConfig } from "./formats";
-import { eliminationOf, qualifierCount, validateFormat } from "./formats";
+import { eliminationOf, placementRanks, qualifierCount, validateFormat } from "./formats";
+import { ordinal } from "./text";
 import { roundRobinRounds } from "./roundrobin";
 import { shuffle } from "./rng";
 
@@ -512,6 +513,31 @@ export function generatePlan(
       }
       current = next;
     }
+  }
+
+  // --- Places below the playoff ------------------------------------------
+  // The teams that missed the playoff still have someone to play. Their games
+  // take the tables the knockout leaves free, lowest place first — so with two
+  // semi-finals on three tables the 7th-place game runs beside them, and the
+  // 5th-place game beside the final.
+  // Lowest place first: the 7th-place game takes the free table beside the
+  // semi-finals, which leaves the 5th-place game next to the final — the two
+  // games people care about most end the day together.
+  const placements = [...placementRanks(config, teams.length)].sort((a, b) => b.place - a.place);
+  for (const { rank, place } of placements) {
+    const free = slots
+      .filter((s) => s.stage !== "GROUP")
+      .sort((a, b) => a.index - b.index)
+      .find((s) => matches.filter((m) => m.slotIndex === s.index).length < tableCount);
+    const si = free ? free.index : pushSlot(`${ordinal(place)} place`, "THIRD");
+    matches.push({
+      key: `m${++matchNo}`,
+      slotIndex: si,
+      tableNo: matches.filter((m) => m.slotIndex === si).length + 1,
+      groupKey: null,
+      sourceA: { kind: "GROUP_RANK", groupKey: groups[0]!.key, rank },
+      sourceB: { kind: "GROUP_RANK", groupKey: groups[1]!.key, rank },
+    });
   }
 
   slots.sort((a, b) => a.index - b.index);

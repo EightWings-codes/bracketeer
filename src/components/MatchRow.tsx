@@ -33,6 +33,7 @@ export default function MatchRow({
         <span>
           {tableLabel}
           {m.groupName ? ` · ${m.groupName}` : ""}
+          {m.placeLabel ? ` · ${m.placeLabel}` : ""}
         </span>
         <StatusBadge value={m.status} />
       </div>

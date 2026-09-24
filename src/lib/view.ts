@@ -49,11 +49,26 @@ export async function loadTournamentView(slug: string, now = new Date()) {
     label: s.label,
   }));
 
+  const format = formatOf(t);
+  /**
+   * A game for a place below the playoff: both sides come from the same rank
+   * in the two groups, below the rank that qualifies. Rank 3 plays for 5th,
+   * rank 4 for 7th. Derived rather than stored — the sources already say it.
+   */
+  const placeLabel = (m: (typeof t.matches)[number]): string | null => {
+    const rank = m.sourceARank;
+    if (m.sourceAKind !== "GROUP_RANK" || m.sourceBKind !== "GROUP_RANK") return null;
+    if (rank === null || rank !== m.sourceBRank) return null;
+    if (rank <= (format?.advancePerGroup ?? 0)) return null;
+    return `${ordinal(2 * rank - 1)} place`;
+  };
+
   const matches = t.matches
     .map((m) => {
       const slot = slotById.get(m.slotId)!;
       return {
         ...m,
+        placeLabel: placeLabel(m),
         slotIndex: slot.index,
         slotLabel: slot.label,
         stage: slot.stage,
@@ -84,7 +99,7 @@ export async function loadTournamentView(slug: string, now = new Date()) {
     slots,
     matches,
     standings,
-    format: formatOf(t),
+    format,
     running,
     /** Latest projected end across the running rounds — the "ends ~" caption. */
     runningEnd: running.length
