@@ -8,7 +8,7 @@ import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma";
 import { APP } from "./config";
-import { generatePlan, type PlanSource, type Stage, type TeamRef } from "./bracket";
+import { generatePlan, packGroupStage, type PlanSource, type Stage, type TeamRef } from "./bracket";
 import { findPreset, type FormatConfig } from "./formats";
 import { randomSeed, seededRng } from "./rng";
 import { normaliseMembers, rosterProblem, sizeBoundsProblem } from "./roster";
@@ -710,6 +710,110 @@ export async function deleteSlot(slotId: string, actorId: string) {
     for (const l of later) await tx.slot.update({ where: { id: l.id }, data: { index: l.index - 1 } });
     await audit(tx, s!.tournamentId, actorId, "slot.delete", { slotId });
   });
+}
+
+/**
+ * Re-pack the rounds that have not started yet, filling every table.
+ *
+ * For a tournament planned before packGroupStage existed — or one whose field
+ * changed after the draw — the group stage can sit in more rounds than the
+ * tables require. This moves the *unplayed* group fixtures onto fewer rounds
+ * and deletes the rounds left empty.
+ *
+ * Deliberately conservative, because it is meant to be safe to press during a
+ * live tournament:
+ *   - the draw is untouched; no team changes group and no fixture changes
+ *     opponent, only which round and table it sits on
+ *   - a round that has started, or holds any result, is frozen — and so is
+ *     everything before it
+ *   - knockout rounds are left alone entirely: their matches are referenced by
+ *     id as "winner of…", and they cannot be packed anyway
+ * Match rows are moved, never recreated, so every existing id survives.
+ * `actorId` is only written to the audit log — a dry run never writes at all.
+ */
+export async function repackUpcomingRounds(tournamentId: string, actorId: string, opts: { dryRun?: boolean } = {}) {
+  const t = await getTournament(prisma, tournamentId);
+  const slots = await prisma.slot.findMany({
+    where: { tournamentId },
+    orderBy: { index: "asc" },
+    include: { matches: true },
+  });
+
+  // A round is frozen once it has started or holds any result — and so is
+  // everything before it, so a fixture can never jump in front of a round that
+  // is already under way. Stage plays no part here: a knockout round simply
+  // never joins the packing below.
+  const frozen = (s: (typeof slots)[number]) =>
+    s.startedAt !== null || s.endedAt !== null || s.matches.some((m) => m.status !== "SCHEDULED");
+
+  let firstMovable = 0;
+  slots.forEach((s, i) => {
+    if (frozen(s)) firstMovable = i + 1;
+  });
+  const movable = slots
+    .slice(firstMovable)
+    .filter((s) => s.stage === "GROUP" && s.matches.every((m) => m.teamAId && m.teamBId));
+  if (movable.length === 0) return { moved: 0, slotsBefore: 0, slotsAfter: 0, removed: 0 };
+
+  const fixtures = movable.flatMap((s) =>
+    s.matches.map((m) => ({
+      id: m.id,
+      groupKey: m.groupId ?? "—",
+      // Its current round is its preferred order; packing only pulls a fixture
+      // forward when a table would otherwise stand empty.
+      round: s.index,
+      teamAId: m.teamAId!,
+      teamBId: m.teamBId!,
+    })),
+  );
+
+  const packed = packGroupStage(fixtures, t.tableCount);
+  if (packed.length > movable.length) fail("Re-packing would need more rounds than there are.");
+
+  const keep = movable.slice(0, packed.length);
+  const drop = movable.slice(packed.length);
+  // A fixture counts as moved when its round or its table changes.
+  const placeNow = new Map(
+    movable.flatMap((s) => s.matches.map((m) => [m.id, `${s.id}:${m.tableNo}`] as const)),
+  );
+  const moved = packed.reduce(
+    (n, slotFixtures, si) =>
+      n + slotFixtures.filter((f, ti) => placeNow.get(f.id) !== `${keep[si]!.id}:${ti + 1}`).length,
+    0,
+  );
+
+  const result = {
+    moved,
+    slotsBefore: movable.length,
+    slotsAfter: packed.length,
+    removed: drop.length,
+  };
+  if (opts.dryRun) return result;
+
+  await prisma.$transaction(async (tx) => {
+    // Two passes: (slotId, tableNo) is unique, so park every moving match on a
+    // table number nothing else can hold before writing the real ones.
+    let parking = 1000;
+    for (const f of fixtures) {
+      await tx.match.update({ where: { id: f.id }, data: { tableNo: parking++ } });
+    }
+    for (const [si, slotFixtures] of packed.entries()) {
+      for (const [ti, f] of slotFixtures.entries()) {
+        await tx.match.update({ where: { id: f.id }, data: { slotId: keep[si]!.id, tableNo: ti + 1 } });
+      }
+    }
+    // Renumber the labels of the rounds that moved; the frozen ones keep theirs.
+    const frozenGroupRounds = slots.slice(0, firstMovable).filter((s) => s.stage === "GROUP").length;
+    for (const [si, slot] of keep.entries()) {
+      await tx.slot.update({ where: { id: slot.id }, data: { label: `Group round ${frozenGroupRounds + si + 1}` } });
+    }
+    for (const slot of drop) {
+      await tx.slot.delete({ where: { id: slot.id } });
+    }
+    await audit(tx, tournamentId, actorId, "plan.repack", result);
+  });
+
+  return result;
 }
 
 export async function resetPlan(tournamentId: string, actorId: string) {

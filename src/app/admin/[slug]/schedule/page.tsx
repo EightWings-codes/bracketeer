@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadTournamentView, fmtDelay, type TournamentView, type ViewMatch, type ViewSlot } from "@/lib/view";
+import { repackUpcomingRounds } from "@/lib/tournament";
 import LocalTime from "@/components/LocalTime";
 import LocalDateTimeInput from "@/components/LocalDateTimeInput";
 import StatusBadge from "@/components/StatusBadge";
@@ -19,6 +20,7 @@ import {
   startSlotAction,
   stopSlotAction,
   updateMatchAction,
+  repackAction,
   updateSlotAction,
   updateStageTimingAction,
   updateTournamentAction,
@@ -72,6 +74,9 @@ export default async function SchedulePage({
   );
 
   const ctx: Ctx = { v, slug, teams, editMatch: one("edit"), editRound: one("round") };
+  // What a re-pack would do, without doing it — so the offer only appears when
+  // there is something to gain.
+  const repack = v.slots.length > 0 ? await repackUpcomingRounds(v.id, "", { dryRun: true }) : null;
 
   return (
     <main className="space-y-6">
@@ -101,6 +106,27 @@ export default async function SchedulePage({
               <LocalDateTimeInput name="startsAt" iso={v.startsAt.toISOString()} className={inputCls} required />
             </ActionForm>
           )}
+        </section>
+      )}
+
+      {repack && repack.removed > 0 && (
+        <section className={`${CARD} flex flex-wrap items-center gap-3 p-4`}>
+          <div className="flex-1 text-sm">
+            <p className="font-medium">
+              The rounds still to come would fit into {repack.slotsAfter} instead of {repack.slotsBefore}.
+            </p>
+            <p className="text-zinc-600 dark:text-zinc-400">
+              Same draw, same fixtures — they just move onto the free tables, and {repack.removed}{" "}
+              {repack.removed === 1 ? "round disappears" : "rounds disappear"}. Anything played or running stays put.
+            </p>
+          </div>
+          <ActionForm
+            action={repackAction}
+            hidden={{ slug }}
+            submitLabel="Re-pack the rest"
+            pendingLabel="Packing…"
+            inline
+          />
         </section>
       )}
 

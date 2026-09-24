@@ -24,6 +24,7 @@ import {
   generateTournamentPlan,
   newJoinCode,
   nudgeSlotClock,
+  repackUpcomingRounds,
   resetPlan,
   setStageTiming,
   setTournamentStatus,
@@ -278,6 +279,12 @@ export const redrawAction = action(async (fd, adminId) => {
   const format = isCustom(formatId) ? need(formatOf(t!), "This plan has no stored format.") : formatId;
   const { seed } = await generateTournamentPlan(id, format, adminId, { seed: randomSeed(), force: bool(fd, "force") === true });
   return `Re-drawn (seed ${seed}).`;
+});
+
+export const repackAction = action(async (fd, adminId) => {
+  const r = await repackUpcomingRounds(await tournamentId(fd), adminId);
+  if (r.moved === 0 && r.removed === 0) return "Already packed — nothing to move.";
+  return `Re-packed ${r.moved} matches into ${r.slotsAfter} rounds${r.removed > 0 ? `, ${r.removed} empty rounds removed` : ""}.`;
 });
 
 export const resetPlanAction = action(async (fd, adminId) => {

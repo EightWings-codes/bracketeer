@@ -326,14 +326,14 @@ export interface GroupFixture {
  * Ties go to whoever has rested longest, so pulling a later round forward does
  * not make one group play three slots in a row while another waits.
  */
-export function packGroupStage(fixtures: GroupFixture[], tableCount: number): GroupFixture[][] {
+export function packGroupStage<T extends GroupFixture>(fixtures: T[], tableCount: number): T[][] {
   const pending = [...fixtures];
   const lastPlayed = new Map<string, number>();
-  const slots: GroupFixture[][] = [];
+  const slots: T[][] = [];
 
   while (pending.length > 0) {
     const busy = new Set<string>();
-    const slot: GroupFixture[] = [];
+    const slot: T[] = [];
     const slotIndex = slots.length;
 
     while (slot.length < tableCount) {
