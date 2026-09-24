@@ -11,6 +11,7 @@ import { generatePlan, type PlanSource, type Stage, type TeamRef } from "./brack
 import { findPreset, type FormatConfig } from "./formats";
 import { randomSeed, seededRng } from "./rng";
 import { normaliseMembers, rosterProblem, sizeBoundsProblem } from "./roster";
+import { findTheme, isValidIcon } from "./themes";
 import { resolveSources, type ResolvableMatch } from "./resolve";
 import { projectSchedule, type SlotInput, type SlotProjection } from "./schedule";
 
@@ -82,6 +83,7 @@ export interface TournamentInput {
   pointsLoss?: number;
   allowDraws?: boolean;
   scoreLabel?: string;
+  theme?: string;
   minTeamSize?: number;
   maxTeamSize?: number;
   manualRounds?: boolean;
@@ -91,6 +93,7 @@ export interface TournamentInput {
 }
 
 export async function createTournament(input: TournamentInput, actorId: string) {
+  const theme = findTheme(input.theme);
   const name = input.name.trim();
   if (!name) fail("Give the tournament a name.");
   let slug = slugify(input.slug?.trim() || name);
@@ -111,8 +114,9 @@ export async function createTournament(input: TournamentInput, actorId: string) 
       pointsWin: input.pointsWin ?? 3,
       pointsDraw: input.pointsDraw ?? 1,
       pointsLoss: input.pointsLoss ?? 0,
-      allowDraws: input.allowDraws ?? false,
-      scoreLabel: input.scoreLabel ?? "Points",
+      allowDraws: input.allowDraws ?? theme.defaults.allowDraws,
+      theme: theme.id,
+      scoreLabel: input.scoreLabel?.trim() || theme.defaults.scoreLabel,
       minTeamSize: input.minTeamSize ?? 1,
       maxTeamSize: input.maxTeamSize ?? 8,
       manualRounds: input.manualRounds ?? false,
@@ -175,6 +179,8 @@ export interface RegisterInput {
   name: string;
   members: string[];
   contact?: string | null;
+  /** ThemeIcon id from the tournament's theme; anything else is dropped. */
+  icon?: string | null;
 }
 
 export interface RegisterGate {
@@ -212,16 +218,20 @@ export async function registerTeam(tournamentId: string, input: RegisterInput, g
   const dup = await prisma.team.findUnique({ where: { tournamentId_name: { tournamentId, name } } });
   if (dup) fail("A team with that name is already registered.");
 
+  const icon = input.icon && isValidIcon(t.theme, input.icon) ? input.icon : null;
   const team = await prisma.team.create({
-    data: { tournamentId, name, members, contact: input.contact ?? null, token: newToken() },
+    data: { tournamentId, name, members, contact: input.contact ?? null, icon, token: newToken() },
   });
   await audit(prisma, tournamentId, null, "team.register", { teamId: team.id, name });
   return team;
 }
 
 export async function updateTeam(teamId: string, patch: Prisma.TeamUpdateInput, actorId: string) {
-  const team = await prisma.team.findUnique({ where: { id: teamId } });
+  const team = await prisma.team.findUnique({ where: { id: teamId }, include: { tournament: true } });
   if (!team) fail("Team not found.");
+  if (typeof patch.icon === "string" && patch.icon && !isValidIcon(team!.tournament.theme, patch.icon)) {
+    fail("That emblem is not part of this tournament's theme.");
+  }
   const updated = await prisma.team.update({ where: { id: teamId }, data: patch });
   await audit(prisma, team!.tournamentId, actorId, "team.update", { teamId, ...(patch as object) } as Prisma.InputJsonValue);
   return updated;

@@ -1,6 +1,8 @@
 "use client";
 
-import ActionForm, { inputCls } from "@/components/ActionForm";
+import ActionForm from "@/components/ActionForm";
+import { inputCls } from "@/components/ui";
+import ThemePicker from "@/components/ThemePicker";
 import { createTournamentAction } from "../actions";
 
 export default function NewTournamentForm() {
@@ -20,6 +22,8 @@ export default function NewTournamentForm() {
       <input name="slug" className={inputCls} placeholder="summer-cup" />
       <label className="text-sm font-medium">Description</label>
       <textarea name="description" rows={2} className={inputCls} />
+      <label className="text-sm font-medium">Theme</label>
+      <ThemePicker />
       <label className="text-sm font-medium">Starts at</label>
       <input name="startsAt" type="datetime-local" required defaultValue={local} className={inputCls} />
       <div className="grid grid-cols-3 gap-3">
@@ -47,11 +51,10 @@ export default function NewTournamentForm() {
         </label>
       </div>
       <p className="-mt-1 text-xs text-zinc-500">Set both to 1 for a singles tournament.</p>
-      <label className="text-sm font-medium">Score label</label>
-      <input name="scoreLabel" defaultValue="Cups" className={inputCls} />
-      <label className="flex items-center gap-2 text-sm">
-        <input name="allowDraws" type="checkbox" /> Allow draws
+      <label className="text-sm font-medium">
+        Score label <span className="font-normal text-zinc-500">(optional — the theme sets one)</span>
       </label>
+      <input name="scoreLabel" placeholder="from the theme" className={inputCls} />
       <label className="flex items-center gap-2 text-sm">
         <input name="manualRounds" type="checkbox" /> Manual rounds (no timer — you start and stop each round)
       </label>

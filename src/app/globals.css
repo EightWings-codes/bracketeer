@@ -8,3 +8,271 @@ body {
   font-family:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+
+/* ---------------------------------------------------------------- themes --
+   Registration is the one phase with nothing to show yet — no scores, no
+   bracket, just a list of names growing. Each theme gets a small piece of
+   motion there so the page feels alive while people sign up.
+
+   Everything is decorative and sits behind `aria-hidden`; it all stops for
+   anyone who asked their system for less motion. */
+
+.flourish {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Beer pong: bubbles rising through the panel, like a poured glass. */
+@keyframes rise {
+  from {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.55;
+  }
+  to {
+    transform: translateY(-120px) scale(1.1);
+    opacity: 0;
+  }
+}
+.bubble {
+  position: absolute;
+  bottom: -12px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: rise linear infinite;
+}
+
+/* Töggele: the ball crossing the table, over and over. */
+@keyframes roll {
+  from {
+    transform: translateX(-10%) rotate(0deg);
+  }
+  to {
+    transform: translateX(110%) rotate(1080deg);
+  }
+}
+.roller {
+  position: absolute;
+  bottom: 2px;
+  font-size: 16px;
+  line-height: 1;
+  /* Decoration must never compete with the text it sits behind. */
+  opacity: 0.5;
+  animation: roll 7s linear infinite;
+}
+
+/* Basic: a slow sweep of light, no imagery. */
+@keyframes sweep {
+  from {
+    transform: translateX(-60%);
+  }
+  to {
+    transform: translateX(160%);
+  }
+}
+.sweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  opacity: 0.07;
+  animation: sweep 6s ease-in-out infinite;
+}
+
+/* A newly registered team lands rather than just appearing. */
+@keyframes pop-in {
+  from {
+    transform: scale(0.85) translateY(4px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+.pop-in {
+  animation: pop-in 260ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble,
+  .roller,
+  .sweep,
+  .pop-in {
+    animation: none;
+  }
+  .sweep,
+  .bubble,
+  .roller {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------- projector board --
+   A board is read from across a room, off a projector that eats contrast, on
+   a screen whose size nobody told us. So its type is sized in vh — a share of
+   the screen's height rather than of anything on the page — through a single
+   scale knob the URL can turn. These steps are the only sizes the board uses,
+   and `t-xs` is the floor: nothing on a board may be smaller than that.
+
+   None of it is scoped to a media query. A board is never viewed on a phone. */
+
+.board {
+  --bs: var(--bs0, 1);
+  background-color: var(--board-bg);
+  background-image: var(--board-bg-image, none);
+  color: var(--board-fg);
+}
+
+/* ------------------------------------------------------------- the looks --
+   A look is nothing but this block of custom properties, so adding one is a
+   block here and a row in BOARD_LOOKS. `--board-on-accent` is the text that
+   sits on an accent-filled button — dark on the bright accents, light on the
+   deep ones — and without it the light looks lose their buttons entirely.
+
+   Midnight is also the fallback: it is defined on `.board` itself so a board
+   with no look, or an unknown one, still has a full palette. */
+
+.board,
+.board[data-look="midnight"] {
+  --board-bg: #07070b;
+  --board-bg-image: none;
+  --board-fg: #fafafa;
+  --board-dim: #a1a1aa;
+  --board-line: #27272a;
+  --board-panel: #131318;
+  --board-accent: #34d399;
+  --board-on-accent: #06120c;
+  --board-warn: #fbbf24;
+}
+
+.board[data-look="slate"] {
+  --board-bg: #0f172a;
+  --board-bg-image: radial-gradient(120% 90% at 80% 0%, #1e293b 0%, transparent 60%);
+  --board-fg: #f1f5f9;
+  --board-dim: #94a3b8;
+  --board-line: #334155;
+  --board-panel: #1e293b;
+  --board-accent: #38bdf8;
+  --board-on-accent: #04202e;
+  --board-warn: #fbbf24;
+}
+
+.board[data-look="dusk"] {
+  --board-bg: #17102e;
+  --board-bg-image: linear-gradient(160deg, #2a1a4f 0%, #120b25 70%);
+  --board-fg: #f5f3ff;
+  --board-dim: #c4b5fd;
+  --board-line: #3f2f6b;
+  --board-panel: #241748;
+  --board-accent: #f472b6;
+  --board-on-accent: #2b0716;
+  --board-warn: #fcd34d;
+}
+
+.board[data-look="forest"] {
+  --board-bg: #06231a;
+  --board-bg-image: radial-gradient(110% 80% at 15% 100%, #0b3a2a 0%, transparent 65%);
+  --board-fg: #ecfdf5;
+  --board-dim: #86cfb3;
+  --board-line: #17553f;
+  --board-panel: #0c3527;
+  --board-accent: #a3e635;
+  --board-on-accent: #16250a;
+  --board-warn: #fcd34d;
+}
+
+.board[data-look="ember"] {
+  --board-bg: #1c0f0a;
+  --board-bg-image: radial-gradient(120% 90% at 100% 0%, #3a1d0f 0%, transparent 60%);
+  --board-fg: #fff7ed;
+  --board-dim: #d6b8a3;
+  --board-line: #4a2a1c;
+  --board-panel: #2b1811;
+  --board-accent: #fb923c;
+  --board-on-accent: #2a1204;
+  --board-warn: #fde047;
+}
+
+/* Light looks. A dark hall wants a dark board; a bright bar at four in the
+   afternoon emphatically does not. */
+
+.board[data-look="paper"] {
+  --board-bg: #faf7f0;
+  --board-bg-image: none;
+  --board-fg: #1c1917;
+  --board-dim: #78716c;
+  --board-line: #e0dacd;
+  --board-panel: #ffffff;
+  --board-accent: #047857;
+  --board-on-accent: #ffffff;
+  --board-warn: #b45309;
+}
+
+.board[data-look="daylight"] {
+  --board-bg: #ffffff;
+  --board-bg-image: linear-gradient(180deg, #f8fafc 0%, #ffffff 40%);
+  --board-fg: #0f172a;
+  --board-dim: #475569;
+  --board-line: #cbd5e1;
+  --board-panel: #f1f5f9;
+  --board-accent: #0284c7;
+  --board-on-accent: #ffffff;
+  --board-warn: #b45309;
+}
+
+/* Beamers with a weak lamp wash every mid-tone out. */
+.board[data-look="contrast"] {
+  --board-bg: #000000;
+  --board-bg-image: none;
+  --board-fg: #ffffff;
+  --board-dim: #e5e5e5;
+  --board-line: #737373;
+  --board-panel: #0a0a0a;
+  --board-accent: #4ade80;
+  --board-on-accent: #04120a;
+  --board-warn: #fde047;
+}
+
+.board-compact {
+  --bs: calc(var(--bs0, 1) * 0.62);
+}
+
+.t-xs { font-size: calc(var(--bs) * 2.3vh); line-height: 1.3; }
+.t-sm { font-size: calc(var(--bs) * 2.9vh); line-height: 1.25; }
+.t-md { font-size: calc(var(--bs) * 3.6vh); line-height: 1.2; }
+.t-lg { font-size: calc(var(--bs) * 4.6vh); line-height: 1.15; }
+.t-xl { font-size: calc(var(--bs) * 6vh); line-height: 1.1; }
+.t-2xl { font-size: calc(var(--bs) * 8vh); line-height: 1.05; }
+.t-3xl { font-size: calc(var(--bs) * 11vh); line-height: 1; }
+
+.board-panel {
+  background: var(--board-panel);
+  border: 1px solid var(--board-line);
+  border-radius: calc(var(--bs) * 1.4vh);
+}
+
+.board-dim { color: var(--board-dim); }
+.board-accent { color: var(--board-accent); }
+.board-warn { color: var(--board-warn); }
+
+/* Nobody is holding a mouse in front of a projector. */
+.board-idle, .board-idle * { cursor: none; }
+
+/* The one piece of motion on a running board: proof it is still live. */
+@keyframes board-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.board-live {
+  animation: board-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-live { animation: none; }
+}

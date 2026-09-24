@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import ActionForm, { inputCls } from "@/components/ActionForm";
+import ActionForm from "@/components/ActionForm";
+import { inputCls } from "@/components/ui";
 import { describeSize, unitLower } from "@/lib/roster";
+import { THEMES } from "@/lib/themes";
 import { deleteTournamentAction, resetPlanAction, updateTournamentAction } from "../actions";
 
 const toLocal = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -37,6 +39,19 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
             <input name="startsAt" type="datetime-local" defaultValue={toLocal(t.startsAt)} className={`${inputCls} w-full`} />
           </label>
           <label className="text-sm">
+            <span className="block font-medium">Theme</span>
+            <select name="theme" defaultValue={t.theme} className={`${inputCls} w-full`}>
+              {THEMES.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.emblem} {x.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="self-end text-xs text-zinc-500">
+            Changing the theme keeps every result. Emblems from the old theme stop showing until you switch back.
+          </p>
+          <label className="text-sm">
             <span className="block font-medium">Tables</span>
             <input name="tableCount" type="number" min={1} defaultValue={t.tableCount} className={`${inputCls} w-full`} />
           </label>
@@ -65,6 +80,18 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
             <span className="block font-medium">Table labels <span className="font-normal text-zinc-500">(comma-separated, optional)</span></span>
             <input name="tableLabels" defaultValue={t.tableLabels.join(", ")} placeholder="Left table, Right table" className={`${inputCls} w-full`} />
           </label>
+          <label className="text-sm">
+            <span className="block font-medium">Venue <span className="font-normal text-zinc-500">(optional)</span></span>
+            <input name="venueName" defaultValue={t.venueName ?? ""} placeholder="Sportzentrum, Hall B" className={`${inputCls} w-full`} />
+          </label>
+          <label className="text-sm">
+            <span className="block font-medium">Board backdrop URL <span className="font-normal text-zinc-500">(optional)</span></span>
+            <input name="venueImageUrl" defaultValue={t.venueImageUrl ?? ""} placeholder="https://…/hall-plan.png" className={`${inputCls} w-full`} />
+          </label>
+          <p className="self-end text-xs text-zinc-500 sm:col-span-2">
+            The backdrop sits dimmed behind the live games on the projector board — a hall plan or a map
+            screenshot you host somewhere. Must be https, or a board served over https cannot load it.
+          </p>
           <label className="text-sm">
             <span className="block font-medium">Score label</span>
             <input name="scoreLabel" defaultValue={t.scoreLabel} className={`${inputCls} w-full`} />

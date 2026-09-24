@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { inputCls } from "@/components/ActionForm";
+import { inputCls } from "@/components/ui";
 import { simResetAction, simSeedAction, simTickAction, type SimState } from "../actions";
 import LocalTime from "@/components/LocalTime";
 

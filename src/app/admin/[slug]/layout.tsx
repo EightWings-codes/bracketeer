@@ -38,9 +38,14 @@ export default async function AdminTournamentLayout({
           <StatusBadge value={t.status} />
           {t.testMode && <StatusBadge value="TEST" />}
         </div>
-        <Link href={`/t/${slug}`} className="text-sm text-emerald-600 hover:underline" target="_blank">
-          Public dashboard ↗
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href={`/board/${slug}`} className="text-sm text-emerald-600 hover:underline" target="_blank">
+            Projector board ↗
+          </Link>
+          <Link href={`/t/${slug}`} className="text-sm text-emerald-600 hover:underline" target="_blank">
+            Public dashboard ↗
+          </Link>
+        </div>
       </div>
       <nav className="mb-6 flex flex-wrap gap-1 border-b border-zinc-200 text-sm dark:border-zinc-800">
         {TABS.map(([href, label]) => (

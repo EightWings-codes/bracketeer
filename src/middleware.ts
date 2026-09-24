@@ -11,6 +11,15 @@ import { NextResponse, type NextRequest } from "next/server";
 const TEAM_LINK = /^\/t\/([^/]+)\/team\/([0-9a-f]{16,64})\/?$/;
 
 export function middleware(req: NextRequest) {
+  // The projector board owns the whole screen, site header included. A Server
+  // Component cannot ask for its own pathname, so the one layer that knows it
+  // passes it along as a request header.
+  if (req.nextUrl.pathname.startsWith("/board/")) {
+    const headers = new Headers(req.headers);
+    headers.set("x-board", "1");
+    return NextResponse.next({ request: { headers } });
+  }
+
   const match = TEAM_LINK.exec(req.nextUrl.pathname);
   const res = NextResponse.next();
   if (!match) return res;
@@ -25,4 +34,4 @@ export function middleware(req: NextRequest) {
   return res;
 }
 
-export const config = { matcher: "/t/:slug/team/:token" };
+export const config = { matcher: ["/t/:slug/team/:token", "/board/:slug*"] };

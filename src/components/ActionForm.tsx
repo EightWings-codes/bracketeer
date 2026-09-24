@@ -57,6 +57,3 @@ export default function ActionForm({
     </form>
   );
 }
-
-export const inputCls =
-  "rounded-lg border border-zinc-300 bg-transparent px-2 py-1 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700";

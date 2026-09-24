@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
+import IconPicker from "@/components/IconPicker";
+import type { ThemeIcon } from "@/lib/themes";
 import { registerTeamAction, type RegisterFormState } from "../actions";
 
 const initial: RegisterFormState = {};
@@ -13,6 +15,9 @@ export default function RegisterForm({
   solo,
   sizeHint,
   minMembers,
+  icons,
+  iconLabel,
+  iconHint,
 }: {
   slug: string;
   needsCode: boolean;
@@ -20,6 +25,9 @@ export default function RegisterForm({
   solo: boolean;
   sizeHint: string;
   minMembers: number;
+  icons: ThemeIcon[];
+  iconLabel: string;
+  iconHint: string;
 }) {
   const [state, action, pending] = useActionState(registerTeamAction, initial);
   const v = state.values;
@@ -49,6 +57,13 @@ export default function RegisterForm({
           />
         </>
       )}
+      <div className="mt-3">
+        <p className="text-sm font-medium">
+          {iconLabel} <span className="font-normal text-zinc-500">(optional)</span>
+        </p>
+        <p className="mb-2 text-xs text-zinc-500">{iconHint}</p>
+        <IconPicker icons={icons} />
+      </div>
       <label className="mt-2 text-sm font-medium" htmlFor="contact">
         Contact <span className="font-normal text-zinc-500">(phone or handle, optional)</span>
       </label>

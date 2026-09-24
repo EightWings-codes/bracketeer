@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import RegisterForm from "./RegisterForm";
-import { describeSize, isSolo, unitLower } from "@/lib/roster";
+import { describeSize, isSolo } from "@/lib/roster";
+import { findTheme } from "@/lib/themes";
+import SignupFlourish from "@/components/SignupFlourish";
 
 export const dynamic = "force-dynamic";
 
@@ -10,14 +12,17 @@ export default async function RegisterPage({ params }: { params: Promise<{ slug:
   const { slug } = await params;
   const t = await prisma.tournament.findUnique({ where: { slug } });
   if (!t) notFound();
+  const theme = findTheme(t.theme);
 
   return (
     <main className="mx-auto max-w-md space-y-6 p-6">
-      <div>
+      <div className="relative overflow-hidden rounded-xl p-4 pb-9">
+        <SignupFlourish theme={theme.id} />
         <Link href={`/t/${slug}`} className="text-sm text-zinc-500 hover:underline">
           ← {t.name}
         </Link>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">
+          <span aria-hidden="true" className="mr-1">{theme.emblem}</span>
           {isSolo(t) ? "Enter the tournament" : "Register a team"}
         </h1>
         <p className="text-zinc-500">
@@ -33,6 +38,9 @@ export default async function RegisterPage({ params }: { params: Promise<{ slug:
           solo={isSolo(t)}
           sizeHint={describeSize(t)}
           minMembers={t.minTeamSize}
+          icons={theme.icons}
+          iconLabel={theme.iconLabel}
+          iconHint={theme.iconHint}
         />
       ) : (
         <p className="rounded-xl border border-zinc-200 p-6 text-center text-zinc-500 dark:border-zinc-800">

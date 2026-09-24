@@ -10,7 +10,8 @@ import LocalTime from "@/components/LocalTime";
 import MatchRow from "@/components/MatchRow";
 import QrCode from "@/components/QrCode";
 import StatusBadge from "@/components/StatusBadge";
-import ActionForm, { inputCls } from "@/components/ActionForm";
+import ActionForm from "@/components/ActionForm";
+import { inputCls } from "@/components/ui";
 import {
   confirmMatchAction,
   newJoinCodeAction,

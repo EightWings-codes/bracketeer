@@ -4,7 +4,14 @@ import QRCode from "qrcode";
  * Server-rendered inline SVG: no client JS, and it stays crisp when printed on
  * a poster. Always black on white — a dark-mode QR on a dark card won't scan.
  */
-export default async function QrCode({ value, size = 140 }: { value: string; size?: number }) {
+export default async function QrCode({
+  value,
+  size = 140,
+}: {
+  value: string;
+  /** A number is pixels; a string is any CSS length, e.g. "17vh" on a board. */
+  size?: number | string;
+}) {
   const svg = await QRCode.toString(value, {
     type: "svg",
     margin: 1,

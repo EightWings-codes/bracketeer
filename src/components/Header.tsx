@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { auth, signOut } from "@/auth";
 import { APP } from "@/lib/config";
 
 export default async function Header() {
+  // A projector board has no site chrome at all — see src/middleware.ts.
+  if ((await headers()).get("x-board") === "1") return null;
+
   const session = await auth();
   const user = session?.user;
 
@@ -21,7 +25,9 @@ export default async function Header() {
               <Link href="/admin" className="hover:text-emerald-600">
                 Admin
               </Link>
-              <span className="text-zinc-500">{user.username}</span>
+              <Link href="/admin/account" className="text-zinc-500 hover:text-emerald-600">
+                {user.name ?? user.username}
+              </Link>
               <form
                 action={async () => {
                   "use server";

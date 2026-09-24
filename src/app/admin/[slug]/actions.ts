@@ -97,6 +97,7 @@ export const updateTournamentAction = action(async (fd, adminId) => {
   s("name");
   s("description");
   s("scoreLabel");
+  s("theme");
   const newSlug = str(fd, "newSlug");
   if (newSlug) patch.slug = newSlug;
   const startsAt = date(fd, "startsAt");
@@ -107,6 +108,17 @@ export const updateTournamentAction = action(async (fd, adminId) => {
   if (breakMin !== undefined && breakMin !== null) patch.breakDurationSec = Math.round(breakMin * 60);
   const tableCount = num(fd, "tableCount");
   if (tableCount) patch.tableCount = tableCount;
+  const venueName = str(fd, "venueName");
+  if (venueName !== undefined) patch.venueName = venueName || null;
+  const venueImage = str(fd, "venueImageUrl");
+  if (venueImage !== undefined) {
+    // A board served over https cannot load an http image at all, so rejecting
+    // it here beats a backdrop that silently never appears.
+    if (venueImage && !/^https:\/\//i.test(venueImage)) {
+      throw new DomainError("The venue backdrop must be an https:// image URL.");
+    }
+    patch.venueImageUrl = venueImage || null;
+  }
   const labels = str(fd, "tableLabels");
   if (labels !== undefined) patch.tableLabels = labels.split(",").map((x) => x.trim()).filter(Boolean);
   for (const k of ["minTeamSize", "maxTeamSize"] as const) {
@@ -164,6 +176,8 @@ export const updateTeamAction = action(async (fd, adminId) => {
   if (contact !== undefined) patch.contact = contact || null;
   const seed = num(fd, "seed");
   if (seed !== undefined) patch.seed = seed;
+  const icon = str(fd, "icon");
+  if (icon !== undefined) patch.icon = icon || null;
   await updateTeam(teamId, patch, adminId);
   return "Saved.";
 });

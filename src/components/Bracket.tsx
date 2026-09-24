@@ -8,14 +8,15 @@ import type { ViewMatch } from "@/lib/view";
  */
 const roundOf = (m: ViewMatch) => m.slotLabel.replace(/\s*\(\d+\/\d+\)\s*$/, "");
 
-interface Column {
+export interface BracketColumn {
   title: string;
   order: number;
   matches: ViewMatch[];
 }
 
-function columns(ms: ViewMatch[]): Column[] {
-  const by = new Map<string, Column>();
+/** Exported so the projector board draws the same rounds in the same order. */
+export function bracketColumns(ms: ViewMatch[]): BracketColumn[] {
+  const by = new Map<string, BracketColumn>();
   for (const m of ms) {
     const title = roundOf(m);
     const col = by.get(title) ?? { title, order: m.slotIndex, matches: [] };
@@ -50,7 +51,7 @@ export default function Bracket({
     <div className="space-y-6 overflow-x-auto">
       <Row
         label={double ? "Winners bracket" : null}
-        columns={columns(winners)}
+        columns={bracketColumns(winners)}
         tableLabel={tableLabel}
         highlightId={highlightId}
         trailing={
@@ -58,10 +59,10 @@ export default function Bracket({
         }
       />
       {losers.length > 0 && (
-        <Row label="Losers bracket" columns={columns(losers)} tableLabel={tableLabel} highlightId={highlightId} />
+        <Row label="Losers bracket" columns={bracketColumns(losers)} tableLabel={tableLabel} highlightId={highlightId} />
       )}
       {grandFinal.length > 0 && (
-        <Row label={null} columns={columns(grandFinal)} tableLabel={tableLabel} highlightId={highlightId} />
+        <Row label={null} columns={bracketColumns(grandFinal)} tableLabel={tableLabel} highlightId={highlightId} />
       )}
     </div>
   );
@@ -75,7 +76,7 @@ function Row({
   trailing = null,
 }: {
   label: string | null;
-  columns: Column[];
+  columns: BracketColumn[];
   tableLabel: (n: number) => string;
   highlightId?: string | null;
   trailing?: { title: string; matches: ViewMatch[] } | null;

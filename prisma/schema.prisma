@@ -85,6 +85,10 @@ model Tournament {
   allowDraws  Boolean @default(false)
   scoreLabel  String  @default("Points")
 
+  /// Look and vocabulary — see src/lib/themes.ts. A plain string rather than
+  /// an enum so adding a theme stays a code change, not a migration.
+  theme String @default("basic")
+
   // Roster. maxTeamSize 1 makes it a singles tournament and the UI says
   // "player" rather than "team".
   minTeamSize Int @default(1)
@@ -96,10 +100,20 @@ model Tournament {
   gameDurationSec  Int      @default(1200)
   breakDurationSec Int      @default(300)
   manualRounds     Boolean  @default(false)
+  /// Per-stage clock, keyed by Stage — see src/lib/stage-timing.ts. Holds the
+  /// game length, the break between rounds of that stage, and the (usually
+  /// longer) break after its last round. Anything unset falls back to the two
+  /// durations above, and a slot's own override still wins over both.
+  stageTiming      Json?
 
   // Venue
   tableCount  Int      @default(2)
   tableLabels String[] @default([])
+  /// Shown on the projector board. The image is a backdrop only — a hall plan
+  /// or a map screenshot the organiser hosts somewhere; we never fetch it
+  /// server-side, the browser does.
+  venueName     String?
+  venueImageUrl String?
 
   // Format snapshot (see src/lib/formats.ts)
   formatId     String?
@@ -129,6 +143,8 @@ model Team {
   members      String[]   @default([])
   contact      String?
   status       TeamStatus @default(PENDING)
+  /// Id of a ThemeIcon from the tournament's theme. Null = no emblem picked.
+  icon         String?
   seed         Int?
   groupId      String?
   /// Private link credential — crypto.randomBytes, never cuid.

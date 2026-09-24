@@ -22,11 +22,15 @@ export default function Countdown({
   serverNowIso,
   className,
   overrunLabel = "over",
+  countUp = false,
 }: {
   targetIso: string;
   serverNowIso: string;
   className?: string;
   overrunLabel?: string;
+  /** Count away from a moment already past — a manual round has no end to
+   *  count towards, only a start to count from. */
+  countUp?: boolean;
 }) {
   const [skew] = useState(() => new Date(serverNowIso).getTime() - Date.now());
   const target = new Date(targetIso).getTime();
@@ -41,8 +45,8 @@ export default function Countdown({
 
   return (
     <span className={className} suppressHydrationWarning>
-      {fmt(remaining)}
-      {remaining < 0 && <span className="ml-2 text-base font-normal text-red-500">{overrunLabel}</span>}
+      {fmt(countUp ? -remaining : remaining)}
+      {!countUp && remaining < 0 && <span className="ml-2 text-base font-normal text-red-500">{overrunLabel}</span>}
     </span>
   );
 }

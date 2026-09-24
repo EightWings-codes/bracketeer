@@ -4,6 +4,8 @@ import { APP } from "@/lib/config";
 import { fmtDelay, loadTournamentView } from "@/lib/view";
 import { rememberedTeam } from "@/lib/team-cookie";
 import YouAre from "@/components/YouAre";
+import TeamIcon from "@/components/TeamIcon";
+import SignupFlourish from "@/components/SignupFlourish";
 import AutoRefresh from "@/components/AutoRefresh";
 import Countdown from "@/components/Countdown";
 import LocalTime from "@/components/LocalTime";
@@ -186,30 +188,40 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
     </ol>
   );
 
+  const signingUp = v.status === "REGISTRATION";
   const teams = (
-    <ul className="flex flex-wrap gap-2 text-sm">
-      {v.teams
-        .filter((t) => t.status !== "REJECTED")
-        .map((t) => (
-          <li
-            key={t.id}
-            className={[
-              "rounded-full border px-3 py-1",
-              t.id === me?.id
-                ? "border-emerald-500 bg-emerald-50 font-medium dark:bg-emerald-950/40"
-                : "border-zinc-200 dark:border-zinc-800",
-            ].join(" ")}
-          >
-            {t.name}
-            {t.status === "PENDING" && (
-              <span className="ml-1 text-amber-500" title="awaiting confirmation">
-                •
-              </span>
-            )}
-          </li>
-        ))}
-      {v.teams.length === 0 && <li className="text-zinc-500">No teams yet.</li>}
-    </ul>
+    // During signup this is the whole show, so it gets the theme's flourish.
+    <div className={signingUp ? "relative overflow-hidden rounded-xl p-3" : undefined}>
+      {signingUp && <SignupFlourish theme={v.theme} />}
+      <ul className="relative flex flex-wrap gap-2 text-sm">
+        {v.teams
+          .filter((t) => t.status !== "REJECTED")
+          .map((t, i) => (
+            <li
+              key={t.id}
+              style={signingUp ? { animationDelay: `${Math.min(i, 12) * 40}ms` } : undefined}
+              className={[
+                "flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-3",
+                signingUp ? "pop-in" : "",
+                t.id === me?.id
+                  ? "border-emerald-500 bg-emerald-50 font-medium dark:bg-emerald-950/40"
+                  : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900",
+              ].join(" ")}
+            >
+              <TeamIcon theme={v.theme} icon={t.icon} />
+              {t.name}
+              {t.status === "PENDING" && (
+                <span className="text-amber-500" title="awaiting confirmation">
+                  •
+                </span>
+              )}
+            </li>
+          ))}
+        {v.teams.length === 0 && (
+          <li className="text-zinc-500">{signingUp ? "Nobody yet — be the first." : "No teams yet."}</li>
+        )}
+      </ul>
+    </div>
   );
 
   const tabs: Tab[] = [{ id: "stages", label: "Stages", content: stages }];
@@ -223,7 +235,10 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">{v.name}</h1>
+            <h1 className="text-3xl font-bold tracking-tight">
+              <span aria-hidden="true" className="mr-1">{v.themeConfig.emblem}</span>
+              {v.name}
+            </h1>
             <StatusBadge value={v.status} />
             {v.testMode && <StatusBadge value="TEST" />}
           </div>

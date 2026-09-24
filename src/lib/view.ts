@@ -5,6 +5,7 @@
 import { prisma } from "./prisma";
 import { computeStandings, type StandingRow } from "./standings";
 import { formatOf, projectionByIndex } from "./tournament";
+import { findTheme, tableLabel as themeTableLabel } from "./themes";
 import type { SlotProjection } from "./schedule";
 
 export type TournamentView = NonNullable<Awaited<ReturnType<typeof loadTournamentView>>>;
@@ -32,6 +33,7 @@ export async function loadTournamentView(slug: string, now = new Date()) {
   const projection = projectionByIndex(t, t.slots, now);
   const slotById = new Map(t.slots.map((s) => [s.id, s]));
   const teamName = new Map(t.teams.map((x) => [x.id, x.name]));
+  const teamIcon = new Map(t.teams.map((x) => [x.id, x.icon]));
   const groupName = new Map(t.groups.map((g) => [g.id, g.name]));
   // Short "where does this side come from" reference, e.g. "Losers round 1 T2".
   const matchRef = new Map(
@@ -90,7 +92,10 @@ export async function loadTournamentView(slug: string, now = new Date()) {
     delaySec,
     now,
     teamName,
-    tableLabel: (n: number) => t.tableLabels[n - 1] ?? `Table ${n}`,
+    /** Team id → ThemeIcon id, for <TeamIcon>. */
+    teamIcon,
+    themeConfig: findTheme(t.theme),
+    tableLabel: (n: number) => themeTableLabel(findTheme(t.theme), t.tableLabels, n),
   };
 }
 

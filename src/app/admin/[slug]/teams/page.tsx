@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import StatusBadge from "@/components/StatusBadge";
-import ActionForm, { inputCls } from "@/components/ActionForm";
+import TeamIcon from "@/components/TeamIcon";
+import { findTheme } from "@/lib/themes";
+import ActionForm from "@/components/ActionForm";
+import { inputCls } from "@/components/ui";
 import { addTeamAction, deleteTeamAction, setStatusAction, teamStatusAction, updateTeamAction } from "../actions";
 
 export default async function TeamsPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -48,10 +51,19 @@ export default async function TeamsPage({ params }: { params: Promise<{ slug: st
               <tr key={team.id} className="align-top">
                 <td colSpan={5} className="p-2">
                   <ActionForm action={updateTeamAction} hidden={{ slug, teamId: team.id }} submitLabel="Save" variant="ghost" inline>
+                    <TeamIcon theme={t.theme} icon={team.icon} size="md" className="mb-0.5" />
                     <input name="name" defaultValue={team.name} className={`${inputCls} w-40`} />
                     <input name="members" defaultValue={team.members.join(", ")} placeholder="players" className={`${inputCls} w-48`} />
                     <input name="contact" defaultValue={team.contact ?? ""} placeholder="contact" className={`${inputCls} w-32`} />
                     <input name="seed" type="number" defaultValue={team.seed ?? ""} placeholder="seed" className={`${inputCls} w-16`} />
+                    <select name="icon" defaultValue={team.icon ?? ""} className={`${inputCls} w-36`}>
+                      <option value="">— no emblem —</option>
+                      {findTheme(t.theme).icons.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.label}
+                        </option>
+                      ))}
+                    </select>
                     <span className="pb-1.5 text-xs text-zinc-500">{team.group?.name ?? ""}</span>
                   </ActionForm>
                   <Link href={`/t/${slug}/team/${team.token}`} className="ml-2 text-xs text-zinc-400 hover:underline">

@@ -51,6 +51,7 @@ export async function registerTeamAction(
         name: String(formData.get("name") ?? ""),
         members,
         contact: String(formData.get("contact") ?? "").trim() || null,
+        icon: String(formData.get("icon") ?? "").trim() || null,
       },
       { ip, joinCode: String(formData.get("joinCode") ?? "") },
     );

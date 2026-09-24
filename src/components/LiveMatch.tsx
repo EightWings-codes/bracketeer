@@ -1,5 +1,6 @@
 import type { ViewMatch } from "@/lib/view";
 import StatusBadge from "./StatusBadge";
+import TeamIcon from "./TeamIcon";
 
 /**
  * A match as the players themselves need it: who is playing, on which table,
@@ -11,11 +12,16 @@ export default function LiveMatch({
   m,
   tableLabel,
   highlightId,
+  theme,
+  iconFor,
   children,
 }: {
   m: ViewMatch;
   tableLabel: string;
   highlightId?: string | null;
+  theme?: string;
+  /** Team id → emblem id. */
+  iconFor?: (teamId: string | null) => string | null;
   children?: React.ReactNode;
 }) {
   const hasScore = m.scoreA !== null && m.scoreB !== null;
@@ -23,6 +29,9 @@ export default function LiveMatch({
 
   const side = (name: string, id: string | null, score: number | null, won: boolean) => (
     <div className="flex items-baseline justify-between gap-3">
+      {theme && iconFor?.(id) && (
+        <TeamIcon theme={theme} icon={iconFor(id)} size="md" className="self-center" />
+      )}
       <span
         className={[
           "min-w-0 truncate text-xl font-semibold sm:text-2xl",

@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { loadTournamentView, fmtDelay, type TournamentView, type ViewMatch, type ViewSlot } from "@/lib/view";
 import LocalTime from "@/components/LocalTime";
 import StatusBadge from "@/components/StatusBadge";
-import ActionForm, { inputCls } from "@/components/ActionForm";
+import ActionForm from "@/components/ActionForm";
+import { inputCls } from "@/components/ui";
 import { STAGES } from "@/lib/bracket";
 import {
   confirmMatchAction,
