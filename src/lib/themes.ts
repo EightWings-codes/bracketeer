@@ -141,6 +141,11 @@ export const THEMES: Theme[] = [
       brewed("schuetzengarten", "Schützengarten", "SG", "bg-pink-700 text-white"),
       brewed("sonnenbraeu", "Sonnenbräu", "SB", "bg-purple-800 text-white"),
       brewed("unser-bier", "Unser Bier", "UB", "bg-slate-700 text-white"),
+      // No can photo for these two yet, so they fall back to the monogram.
+      // Teams already playing under them keep their beer instead of losing
+      // their emblem entirely when the photo set changed.
+      neutral("monstein", "Monstein", "MO", "bg-teal-600 text-white"),
+      neutral("valaisanne", "Valaisanne", "VL", "bg-yellow-500 text-yellow-950"),
     ],
   },
   {

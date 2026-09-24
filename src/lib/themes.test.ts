@@ -125,9 +125,11 @@ describe("shipped emblem artwork", () => {
   it("every beer pong emblem has a file that actually exists", async () => {
     const { existsSync } = await import("node:fs");
     const { join } = await import("node:path");
+    // An emblem may ship without a photo — it falls back to the monogram —
+    // but one that claims artwork must actually have the file.
     for (const icon of findTheme("beerpong").icons) {
-      expect(icon.art, `${icon.id} has no artwork`).toBeTruthy();
-      expect(existsSync(join(process.cwd(), "public", icon.art!)), `missing ${icon.art}`).toBe(true);
+      if (!icon.art) continue;
+      expect(existsSync(join(process.cwd(), "public", icon.art)), `missing ${icon.art}`).toBe(true);
     }
   });
 
@@ -138,9 +140,9 @@ describe("shipped emblem artwork", () => {
       .filter((f) => f.endsWith(".jpg"))
       .map((f) => f.replace(/\.jpg$/, ""))
       .sort();
-    const wired = findTheme("beerpong").icons.map((i) => i.id).sort();
+    const wired = findTheme("beerpong").icons.map((i) => i.id);
     // Dropping a can in the folder and forgetting to wire it should fail here.
-    expect(wired).toEqual(onDisk);
+    for (const id of onDisk) expect(wired, `${id}.jpg is not wired up`).toContain(id);
   });
 
   it("leaves themes without artwork on their coloured badges", () => {
