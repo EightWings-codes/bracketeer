@@ -33,6 +33,19 @@ schedule — cycling, pinned or all at once. Everything it can be told is in the
 query string, e.g. `?view=all&dwell=8&contrast=high`. See
 `docs/projector-board.md`.
 
+## Planning a day
+
+The **Format** tab builds the day from two independent choices: how the group
+stage is laid out, and how big the playoff is. Three groups of four can feed
+quarter-finals (top 2 + the two best 3rds) or go straight to semi-finals (the
+three winners + the best runner-up) — the advance/wildcard split is derived, not
+configured. Presets are still there as quick starts.
+
+The **Schedule** tab's *Stage timing* card gives each stage in the plan its own
+game length, break between its rounds, and the (usually longer) break before the
+next stage. Anything left empty falls back to the tournament defaults on the
+settings tab, and a single round can still override both from its ⚙ menu.
+
 `npm run typecheck` and `npm run test` are the gates. Branding lives in
 `src/lib/config.ts`.
 

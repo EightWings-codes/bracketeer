@@ -1,12 +1,11 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import ActionForm from "@/components/ActionForm";
+import LocalDateTimeInput from "@/components/LocalDateTimeInput";
 import { inputCls } from "@/components/ui";
 import { describeSize, unitLower } from "@/lib/roster";
 import { THEMES } from "@/lib/themes";
 import { deleteTournamentAction, resetPlanAction, updateTournamentAction } from "../actions";
-
-const toLocal = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
 export default async function SettingsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -36,7 +35,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
           </label>
           <label className="text-sm">
             <span className="block font-medium">Starts at</span>
-            <input name="startsAt" type="datetime-local" defaultValue={toLocal(t.startsAt)} className={`${inputCls} w-full`} />
+            <LocalDateTimeInput name="startsAt" iso={t.startsAt.toISOString()} className={`${inputCls} w-full`} />
           </label>
           <label className="text-sm">
             <span className="block font-medium">Theme</span>
@@ -56,12 +55,12 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
             <input name="tableCount" type="number" min={1} defaultValue={t.tableCount} className={`${inputCls} w-full`} />
           </label>
           <label className="text-sm">
-            <span className="block font-medium">Game duration (min)</span>
-            <input name="gameMin" type="number" step="0.5" min={0.5} defaultValue={t.gameDurationSec / 60} disabled={t.manualRounds} className={`${inputCls} w-full disabled:opacity-40`} />
+            <span className="block font-medium">Default game duration (min)</span>
+            <input name="gameMin" type="number" step="0.5" min={0.5} defaultValue={t.gameDurationSec / 60} className={`${inputCls} w-full`} />
           </label>
           <label className="text-sm">
-            <span className="block font-medium">Break (min)</span>
-            <input name="breakMin" type="number" step="0.5" min={0} defaultValue={t.breakDurationSec / 60} disabled={t.manualRounds} className={`${inputCls} w-full disabled:opacity-40`} />
+            <span className="block font-medium">Default break (min)</span>
+            <input name="breakMin" type="number" step="0.5" min={0} defaultValue={t.breakDurationSec / 60} className={`${inputCls} w-full`} />
           </label>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <label>
@@ -75,6 +74,10 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
           </div>
           <p className="self-end text-xs text-zinc-500">
             Currently {describeSize(t)} — set both to 1 for a singles tournament.
+          </p>
+          <p className="self-end text-xs text-zinc-500 sm:col-span-2">
+            The two durations above are the fallback for every round. Give a stage its own game and break lengths —
+            and the longer gap before the next stage — under <strong>Stage timing</strong> on the schedule tab.
           </p>
           <label className="text-sm sm:col-span-2">
             <span className="block font-medium">Table labels <span className="font-normal text-zinc-500">(comma-separated, optional)</span></span>
@@ -116,7 +119,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
           <label className="flex items-center gap-2 text-sm sm:col-span-2">
             <input name="manualRounds" type="checkbox" defaultChecked={t.manualRounds} />
             <span>
-              Manual rounds <span className="text-zinc-500">— no timer or projected times; rounds move only when you start and stop them</span>
+              Manual rounds <span className="text-zinc-500">— the game timer runs from each Start, the break timer from each Stop, and both wait at zero for you</span>
             </span>
           </label>
           <label className="flex items-center gap-2 text-sm">

@@ -126,6 +126,9 @@ body {
   --bs: var(--bs0, 1);
   background-color: var(--board-bg);
   background-image: var(--board-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   color: var(--board-fg);
 }
 
@@ -224,6 +227,24 @@ body {
   --board-accent: #0284c7;
   --board-on-accent: #ffffff;
   --board-warn: #b45309;
+}
+
+/* A look can be built around a picture rather than a colour. The drawing is
+   pale enough to sit under the whole board as a watermark, so it is the
+   background itself and not the games-view backdrop — and the panels are
+   translucent so it carries on showing through them. Every colour here was
+   sampled from the image: its ink runs at hue 30°, and the accent is that same
+   hue taken down to something a name can be read against. */
+.board[data-look="tuermli"] {
+  --board-bg: #f8f0e4;
+  --board-bg-image: url("/board/tuermli.jpg");
+  --board-fg: #2b211a;
+  --board-dim: #7c6a58;
+  --board-line: #ddcdb8;
+  --board-panel: rgb(255 252 245 / 0.82);
+  --board-accent: #865727;
+  --board-on-accent: #fffaf2;
+  --board-warn: #b26619;
 }
 
 /* Beamers with a weak lamp wash every mid-tone out. */

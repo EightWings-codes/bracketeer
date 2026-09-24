@@ -2,6 +2,8 @@
  * Declarative tournament format presets. One generic generator (bracket.ts)
  * consumes a FormatConfig; adding a format is adding a row here.
  */
+import { ordinal } from "./text";
+
 export interface FormatConfig {
   id: string;
   label: string;
@@ -157,6 +159,145 @@ export const PRESETS: FormatConfig[] = [
 
 export function findPreset(id: string): FormatConfig | undefined {
   return PRESETS.find((p) => p.id === id);
+}
+
+// ------------------------------------------------------------ custom builds
+
+/** The id every hand-built format carries; the shape itself is in formatConfig. */
+export const CUSTOM_ID = "custom";
+
+export const isCustom = (id: string | null | undefined) => id === CUSTOM_ID;
+
+export interface CustomFormatInput {
+  teamCount: number;
+  /** 0 = no group stage (straight knockout). */
+  groupCount: number;
+  /** Teams that reach the knockout — 0 = groups only, no playoff. */
+  playoffSize: number;
+  thirdPlaceMatch?: boolean;
+  elimination?: Elimination;
+}
+
+/**
+ * Build a format from the two decisions an organiser actually makes: how the
+ * group stage is laid out, and how big the playoff is. The two are deliberately
+ * independent — three groups of four can feed quarter-finals (top 2 + 2 best
+ * 3rds) or semi-finals (the three winners + the best runner-up), and the
+ * advance/wildcard split is derived rather than chosen.
+ */
+export function customFormat(input: CustomFormatInput): FormatConfig {
+  const { teamCount, groupCount, playoffSize } = input;
+  const elimination = input.elimination ?? "SINGLE";
+  const groupSize = groupCount > 0 ? Math.floor(teamCount / groupCount) : 0;
+  const advancePerGroup = groupCount > 0 ? Math.floor(playoffSize / groupCount) : 0;
+  const wildcards = groupCount > 0 ? playoffSize - advancePerGroup * groupCount : 0;
+  return {
+    id: CUSTOM_ID,
+    label: describeCustom({ ...input, elimination }),
+    teamCount,
+    groupCount,
+    groupSize,
+    advancePerGroup,
+    wildcards,
+    thirdPlaceMatch: input.thirdPlaceMatch ?? false,
+    elimination,
+  };
+}
+
+/** "12 teams · 3 groups of 4 · 3 winners + best runner-up · semi-finals". */
+export function describeCustom(input: CustomFormatInput & { elimination?: Elimination }): string {
+  const { teamCount, groupCount, playoffSize } = input;
+  const parts = [`${teamCount} teams`];
+  if (groupCount === 0) {
+    parts.push(input.elimination === "DOUBLE" ? "double elimination" : "single elimination");
+    return parts.join(" · ");
+  }
+  const groupSize = Math.floor(teamCount / groupCount);
+  parts.push(groupCount === 1 ? `one table of ${groupSize}` : `${groupCount} groups of ${groupSize}`);
+  if (playoffSize === 0) {
+    parts.push("no playoff");
+    return parts.join(" · ");
+  }
+  const advance = Math.floor(playoffSize / groupCount);
+  const wildcards = playoffSize - advance * groupCount;
+  parts.push(describeQualifiers(advance, wildcards));
+  parts.push(playoffLabel(playoffSize).toLowerCase());
+  return parts.join(" · ");
+}
+
+function describeQualifiers(advance: number, wildcards: number): string {
+  const place = (n: number) => (n === 1 ? "winner" : n === 2 ? "runner-up" : ordinal(n));
+  const base =
+    advance === 0
+      ? ""
+      : advance === 1
+        ? "group winners"
+        : advance === 2
+          ? "top 2"
+          : `top ${advance}`;
+  if (wildcards === 0) return base;
+  const pool = `best ${place(advance + 1)}${wildcards > 1 ? `s (${wildcards})` : ""}`;
+  return base ? `${base} + ${pool}` : `${wildcards} ${pool}`;
+}
+
+/** "Quarter-finals" for 8, "Semi-finals" for 4, "Final" for 2, "Round of 16"… */
+export function playoffLabel(playoffSize: number): string {
+  switch (playoffSize) {
+    case 0:
+      return "No playoff";
+    case 2:
+      return "Final only";
+    case 4:
+      return "Semi-finals";
+    case 8:
+      return "Quarter-finals";
+    default:
+      return `Round of ${playoffSize}`;
+  }
+}
+
+/** How a stored config reads back: presets keep their label, builds re-describe. */
+export function describeFormat(c: FormatConfig, teamCount: number): string {
+  if (c.id !== CUSTOM_ID) return c.label;
+  return describeCustom(customInputOf(c, teamCount));
+}
+
+/** The builder settings a stored config came from, so the page can reopen on them. */
+export function customInputOf(c: FormatConfig, teamCount: number): CustomFormatInput {
+  return {
+    teamCount: c.teamCount ?? teamCount,
+    groupCount: c.groupCount,
+    playoffSize: c.groupCount === 0 ? (c.teamCount ?? teamCount) : qualifierCount(c, teamCount),
+    thirdPlaceMatch: c.thirdPlaceMatch,
+    elimination: eliminationOf(c),
+  };
+}
+
+/** Group layouts that divide the field evenly, largest groups first. */
+export function groupOptions(teamCount: number): number[] {
+  const out: number[] = [];
+  for (let g = 1; g <= Math.floor(teamCount / 2); g++) {
+    if (teamCount % g === 0) out.push(g);
+  }
+  return out;
+}
+
+/**
+ * Playoff sizes a given group layout can actually feed: powers of two that fit
+ * the field and never ask a group for more teams than it has.
+ */
+export function playoffOptions(teamCount: number, groupCount: number): number[] {
+  const out = [0];
+  const groupSize = groupCount > 0 ? Math.floor(teamCount / groupCount) : 0;
+  for (let q = 2; q <= teamCount; q *= 2) {
+    if (groupCount === 0) {
+      if (q === teamCount) out.push(q);
+      continue;
+    }
+    if (Math.floor(q / groupCount) > groupSize) continue;
+    out.push(q);
+  }
+  return out;
 }
 
 export function isPowerOfTwo(n: number): boolean {

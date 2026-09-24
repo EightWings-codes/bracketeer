@@ -49,8 +49,9 @@ export function BoardBand({ v, cfg }: { v: TournamentView; cfg: BoardConfig }) {
 /**
  * Time left in the running round, counted down from the projection — so it
  * agrees with the phone in every player's pocket, over-runs included. With no
- * round running it counts towards the next one instead, and with manual rounds
- * there is nothing to count towards, so it counts up from the start.
+ * round running it counts towards the next one instead. Manual rounds read
+ * the round clock: the game from its start, the break from its stop, and both
+ * hold at zero until the organiser moves on.
  */
 function BoardTimer({ v }: { v: TournamentView }) {
   const nowIso = v.now.toISOString();
@@ -60,14 +61,15 @@ function BoardTimer({ v }: { v: TournamentView }) {
 
   let caption: string;
   let targetIso: string;
-  let countUp = false;
+  let stopAtZero = false;
   let delaySec = 0;
 
   if (v.manualRounds) {
-    if (!running?.startedAt) return null;
-    caption = "running for";
-    targetIso = running.startedAt.toISOString();
-    countUp = true;
+    const c = v.clock;
+    if (c.phase === "idle") return null;
+    caption = c.phase === "game" ? "time left" : c.phase === "break" ? "break" : "starts in";
+    targetIso = c.endsAt.toISOString();
+    stopAtZero = true;
   } else if (running && v.runningEnd) {
     caption = "time left";
     targetIso = v.runningEnd.toISOString();
@@ -87,8 +89,8 @@ function BoardTimer({ v }: { v: TournamentView }) {
       <Countdown
         targetIso={targetIso}
         serverNowIso={nowIso}
-        countUp={countUp}
-        overrunLabel="over"
+        stopAtZero={stopAtZero}
+        overrunLabel={stopAtZero ? "" : "over"}
         className="t-2xl block font-bold tabular-nums"
       />
       {delaySec > 60 && <div className="t-xs board-warn">{fmtDelay(delaySec)}</div>}

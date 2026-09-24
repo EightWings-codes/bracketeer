@@ -226,9 +226,10 @@ describe("scheduleRows", () => {
     expect(rows(new Date("2026-09-13T17:00:00Z"), [input(0), input(1)])).toHaveLength(2);
   });
 
-  it("drops the clock under manual rounds", () => {
-    const out = rows(new Date("2026-09-13T18:06:00Z"), [input(0, { startedAt: T0 }), input(1)], true);
-    expect(out.every((r) => r.startIso === null && r.endIso === null)).toBe(true);
+  it("keeps projected times but drops the delay under manual rounds", () => {
+    const out = rows(new Date("2026-09-13T18:14:00Z"), [input(0, { startedAt: T0 }), input(1)], true);
+    expect(out[1]!.startIso).toBe("2026-09-13T18:19:00.000Z");
+    expect(out.every((r) => r.delaySec === 0)).toBe(true);
     expect(out.map((r) => r.number)).toEqual([1, 2]);
   });
 });

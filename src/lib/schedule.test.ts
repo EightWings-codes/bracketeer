@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectSchedule, type SlotInput } from "./schedule";
+import { projectSchedule, roundClock, type SlotInput } from "./schedule";
 
 const T0 = new Date("2026-09-13T18:00:00Z");
 const min = (n: number) => new Date(T0.getTime() + n * 60_000);
@@ -111,5 +111,41 @@ describe("projectSchedule", () => {
     const p = projectSchedule(T0, [slot(0, { durationSec: 40 * 60 }), slot(1)], min(-1));
     expect(p[1]!.projectedStart).toEqual(min(45));
     expect(p[1]!.delaySec).toBe(0);
+  });
+});
+
+describe("roundClock", () => {
+  it("counts to the tournament start before anything has started", () => {
+    expect(roundClock(T0, [slot(0), slot(1)])).toEqual({ phase: "prestart", nextIndex: 0, endsAt: T0 });
+  });
+
+  it("counts a running round down from its own start, not the plan", () => {
+    // Started seven minutes late: the game still gets its full twenty.
+    const c = roundClock(T0, [slot(0, { startedAt: min(7) }), slot(1)]);
+    expect(c).toEqual({ phase: "game", index: 0, endsAt: min(27) });
+  });
+
+  it("does not drift while a round over-runs", () => {
+    const c = roundClock(T0, [slot(0, { startedAt: T0 }), slot(1)]);
+    expect(c.phase === "game" && c.endsAt).toEqual(min(20));
+  });
+
+  it("counts the break from the moment the round was stopped", () => {
+    const c = roundClock(T0, [slot(0, { startedAt: T0, endedAt: min(23) }), slot(1)]);
+    expect(c).toEqual({ phase: "break", afterIndex: 0, nextIndex: 1, endsAt: min(28) });
+  });
+
+  it("uses the stopped round's own break length", () => {
+    const c = roundClock(T0, [slot(0, { startedAt: T0, endedAt: min(20), breakAfterSec: 15 * 60 }), slot(1)]);
+    expect(c.phase === "break" && c.endsAt).toEqual(min(35));
+  });
+
+  it("waits for a pinned start that is later than the break", () => {
+    const c = roundClock(T0, [slot(0, { startedAt: T0, endedAt: min(20) }), slot(1, { plannedStartOverride: min(60) })]);
+    expect(c.phase === "break" && c.endsAt).toEqual(min(60));
+  });
+
+  it("is idle once every round has been played", () => {
+    expect(roundClock(T0, [slot(0, { startedAt: T0, endedAt: min(20) })])).toEqual({ phase: "idle" });
   });
 });

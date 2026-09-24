@@ -130,6 +130,20 @@ function roundLabel(stage: Stage): string {
   }
 }
 
+/** Stage name for headings and the timing editor — "Round of 16", "Final"… */
+export function stageLabel(stage: Stage): string {
+  switch (stage) {
+    case "GROUP":
+      return "Group stage";
+    case "LOSERS":
+      return "Losers bracket";
+    case "GRAND_FINAL":
+      return "Grand final";
+    default:
+      return roundLabel(stage);
+  }
+}
+
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));

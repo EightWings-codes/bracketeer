@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadTournamentView, fmtDelay, type TournamentView, type ViewMatch, type ViewSlot } from "@/lib/view";
 import LocalTime from "@/components/LocalTime";
+import LocalDateTimeInput from "@/components/LocalDateTimeInput";
 import StatusBadge from "@/components/StatusBadge";
 import ActionForm from "@/components/ActionForm";
 import { inputCls } from "@/components/ui";
-import { STAGES } from "@/lib/bracket";
+import { STAGES, stageLabel } from "@/lib/bracket";
+import { effectiveTiming, parseStageTiming, planDurationSec, slotTimings, stagesInOrder } from "@/lib/stage-timing";
 import {
   confirmMatchAction,
   setStatusAction,
@@ -18,6 +20,8 @@ import {
   stopSlotAction,
   updateMatchAction,
   updateSlotAction,
+  updateStageTimingAction,
+  updateTournamentAction,
   voidMatchAction,
 } from "../actions";
 
@@ -74,15 +78,12 @@ export default async function SchedulePage({
       {v.slots.length > 0 && (
         <section className={`${CARD} p-4`}>
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <h2 className="font-semibold">{v.manualRounds ? "Rounds" : "Day plan"}</h2>
-            {v.manualRounds ? (
-              <span className="text-sm text-zinc-500">manual — no timer</span>
-            ) : (
-              <span className="text-sm text-zinc-500">
-                <LocalTime iso={v.slots[0]!.projection.projectedStart.toISOString()} withDate /> –{" "}
-                <LocalTime iso={v.slots[v.slots.length - 1]!.projection.projectedEnd.toISOString()} />
-              </span>
-            )}
+            <h2 className="font-semibold">Day plan</h2>
+            <span className="text-sm text-zinc-500">
+              <LocalTime iso={v.slots[0]!.projection.projectedStart.toISOString()} withDate /> –{" "}
+              <LocalTime iso={v.slots[v.slots.length - 1]!.projection.projectedEnd.toISOString()} />
+            </span>
+            {v.manualRounds && <span className="text-sm text-zinc-500">manual rounds — times follow your start and stop</span>}
             <span className="text-sm text-zinc-500">
               {v.slots.length} rounds · {v.matches.length} matches
             </span>
@@ -92,9 +93,18 @@ export default async function SchedulePage({
               </span>
             )}
           </div>
-          {!v.manualRounds && <Timeline slots={v.slots} />}
+          <Timeline slots={v.slots} />
+          {/* The start only matters until something has been played. */}
+          {!v.slots.some((x) => x.startedAt) && (
+            <ActionForm action={updateTournamentAction} hidden={{ slug }} submitLabel="Set start" variant="secondary" inline className="mt-3 !items-center">
+              <span className="text-xs text-zinc-500">Tournament starts</span>
+              <LocalDateTimeInput name="startsAt" iso={v.startsAt.toISOString()} className={inputCls} required />
+            </ActionForm>
+          )}
         </section>
       )}
+
+      {v.slots.length > 0 && <StageTiming v={v} slug={slug} />}
 
       {v.slots.length === 0 && (
         <p className={`${CARD} p-4 text-sm text-zinc-500`}>
@@ -193,14 +203,12 @@ function Round({ s, ...c }: { s: ViewSlot } & Ctx) {
         <span className="font-semibold">
           <span className="text-zinc-400">#{s.index + 1}</span> {s.label}
         </span>
-        {!v.manualRounds && (
-          <span className="text-sm tabular-nums text-zinc-500">
-            <LocalTime iso={p.projectedStart.toISOString()} /> – <LocalTime iso={p.projectedEnd.toISOString()} />
-            {p.state !== "done" && Math.abs(p.delaySec) > 60 && (
-              <span className="ml-1 text-amber-600">({fmtDelay(p.delaySec)})</span>
-            )}
-          </span>
-        )}
+        <span className="text-sm tabular-nums text-zinc-500">
+          <LocalTime iso={p.projectedStart.toISOString()} /> – <LocalTime iso={p.projectedEnd.toISOString()} />
+          {!v.manualRounds && p.state !== "done" && Math.abs(p.delaySec) > 60 && (
+            <span className="ml-1 text-amber-600">({fmtDelay(p.delaySec)})</span>
+          )}
+        </span>
         <span className="text-sm text-zinc-400">
           {ms.length === 0 ? "no matches" : `${settled}/${ms.length} settled`}
           {reported > 0 && <span className="ml-1 font-medium text-sky-600">· {reported} to confirm</span>}
@@ -371,6 +379,9 @@ function MatchLine({ m, v, slug, editMatch, teams }: { m: ViewMatch } & Ctx) {
 
 function RoundSettings({ s, ms, v, slug, teams }: { s: ViewSlot; ms: ViewMatch[] } & Ctx) {
   const p = s.projection;
+  // Placeholders show what this round would run at without an override, which
+  // since stage timing exists is the stage's number, not the tournament's.
+  const inherited = stageTimingsFor(v).get(s.index)!;
   return (
     <div className="space-y-4 border-t border-zinc-100 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
       <ActionForm
@@ -392,7 +403,7 @@ function RoundSettings({ s, ms, v, slug, teams }: { s: ViewSlot; ms: ViewMatch[]
             type="number"
             step="0.5"
             defaultValue={s.durationSecOverride ? s.durationSecOverride / 60 : ""}
-            placeholder={String(v.gameDurationSec / 60)}
+            placeholder={String(Math.round((inherited.durationSec / 60) * 100) / 100)}
             className={`${inputCls} w-24`}
           />
         </label>
@@ -403,7 +414,7 @@ function RoundSettings({ s, ms, v, slug, teams }: { s: ViewSlot; ms: ViewMatch[]
             type="number"
             step="0.5"
             defaultValue={s.breakAfterSecOverride !== null ? s.breakAfterSecOverride / 60 : ""}
-            placeholder={String(v.breakDurationSec / 60)}
+            placeholder={String(Math.round((inherited.breakAfterSec / 60) * 100) / 100)}
             className={`${inputCls} w-24`}
           />
         </label>
@@ -477,5 +488,110 @@ function TeamSelect({ name, value, teams }: { name: string; value: string | null
         </option>
       ))}
     </select>
+  );
+}
+
+/** Stage clock per round, for the override placeholders. */
+function stageTimingsFor(v: TournamentView) {
+  return slotTimings(v.slots, parseStageTiming(v.stageTiming), v);
+}
+
+/**
+ * Per-stage clock. Every box is optional: empty means "whatever the tournament
+ * default says", which is what the placeholder shows. A single round that needs
+ * its own length still overrides all of this from its ⚙ settings.
+ */
+function StageTiming({ v, slug }: { v: TournamentView; slug: string }) {
+  const map = parseStageTiming(v.stageTiming);
+  const stages = stagesInOrder(v.slots);
+  const defaults = { gameDurationSec: v.gameDurationSec, breakDurationSec: v.breakDurationSec };
+  const min = (sec: number) => String(Math.round((sec / 60) * 100) / 100);
+  const total = planDurationSec(v.slots, map, defaults);
+
+  return (
+    <details className={`${CARD} p-4`}>
+      <summary className="cursor-pointer font-semibold">
+        Stage timing
+        <span className="ml-2 text-sm font-normal text-zinc-500">
+          {stages.map((st) => `${stageLabel(st)} ${min(effectiveTiming(map, st, defaults).gameSec)}′`).join(" · ")} ·{" "}
+          {Math.round(total / 60)} min total
+        </span>
+      </summary>
+
+      <ActionForm
+        action={updateStageTimingAction}
+        hidden={{ slug }}
+        submitLabel="Save stage timing"
+        pendingLabel="Saving…"
+        className="mt-3"
+      >
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-zinc-500">
+              <th className="py-1 pr-2 font-medium">Stage</th>
+              <th className="py-1 pr-2 font-medium">Game (min)</th>
+              <th className="py-1 pr-2 font-medium">Break between rounds</th>
+              <th className="py-1 font-medium">Break after this stage</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stages.map((st) => {
+              const eff = effectiveTiming(map, st, defaults);
+              const own = map[st] ?? {};
+              const rounds = v.slots.filter((s) => s.stage === st).length;
+              return (
+                <tr key={st} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <td className="py-1.5 pr-2">
+                    <span className="font-medium">{stageLabel(st)}</span>
+                    <span className="ml-1 text-xs text-zinc-500">
+                      {rounds} {rounds === 1 ? "round" : "rounds"}
+                    </span>
+                  </td>
+                  <td className="py-1.5 pr-2">
+                    <input
+                      name={`game_${st}`}
+                      type="number"
+                      step="0.5"
+                      min={0.5}
+                      defaultValue={own.gameSec === undefined ? "" : min(own.gameSec)}
+                      placeholder={min(eff.gameSec)}
+                      className={`${inputCls} w-20`}
+                    />
+                  </td>
+                  <td className="py-1.5 pr-2">
+                    <input
+                      name={`break_${st}`}
+                      type="number"
+                      step="0.5"
+                      min={0}
+                      defaultValue={own.breakSec === undefined ? "" : min(own.breakSec)}
+                      placeholder={min(eff.breakSec)}
+                      disabled={rounds < 2}
+                      className={`${inputCls} w-20 disabled:opacity-40`}
+                    />
+                  </td>
+                  <td className="py-1.5">
+                    <input
+                      name={`after_${st}`}
+                      type="number"
+                      step="0.5"
+                      min={0}
+                      defaultValue={own.breakAfterStageSec === undefined ? "" : min(own.breakAfterStageSec)}
+                      placeholder={min(eff.breakAfterStageSec)}
+                      className={`${inputCls} w-20`}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <p className="text-xs text-zinc-500">
+          Empty uses the tournament default ({Math.round(v.gameDurationSec / 60)} min games,{" "}
+          {Math.round(v.breakDurationSec / 60)} min breaks, on the settings tab). The last column is the gap before the
+          next stage starts — the one where teams are worked out and tables re-set.
+        </p>
+      </ActionForm>
+    </details>
   );
 }

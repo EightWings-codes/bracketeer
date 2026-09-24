@@ -51,7 +51,7 @@ export default async function TeamsPage({ params }: { params: Promise<{ slug: st
               <tr key={team.id} className="align-top">
                 <td colSpan={5} className="p-2">
                   <ActionForm action={updateTeamAction} hidden={{ slug, teamId: team.id }} submitLabel="Save" variant="ghost" inline>
-                    <TeamIcon theme={t.theme} icon={team.icon} size="md" className="mb-0.5" />
+                    <TeamIcon theme={t.theme} icon={team.icon} size="md" withLabel className="mb-0.5" />
                     <input name="name" defaultValue={team.name} className={`${inputCls} w-40`} />
                     <input name="members" defaultValue={team.members.join(", ")} placeholder="players" className={`${inputCls} w-48`} />
                     <input name="contact" defaultValue={team.contact ?? ""} placeholder="contact" className={`${inputCls} w-32`} />

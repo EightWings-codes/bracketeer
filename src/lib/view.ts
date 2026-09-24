@@ -4,9 +4,12 @@
  */
 import { prisma } from "./prisma";
 import { computeStandings, type StandingRow } from "./standings";
-import { formatOf, projectionByIndex } from "./tournament";
+import { formatOf, projectionByIndex, slotInputs } from "./tournament";
 import { findTheme, tableLabel as themeTableLabel } from "./themes";
-import type { SlotProjection } from "./schedule";
+import { roundClock, type SlotProjection } from "./schedule";
+import { ordinal } from "./text";
+
+export { ordinal };
 
 export type TournamentView = NonNullable<Awaited<ReturnType<typeof loadTournamentView>>>;
 export type ViewMatch = TournamentView["matches"][number];
@@ -90,6 +93,9 @@ export async function loadTournamentView(slug: string, now = new Date()) {
     next: upcoming[0] ?? null,
     upcoming,
     delaySec,
+    /** What the room is waiting on — the game, the break, or the start. The
+     *  manual-rounds timer; see roundClock. */
+    clock: roundClock(t.startsAt, slotInputs(t, t.slots)),
     now,
     teamName,
     /** Team id → ThemeIcon id, for <TeamIcon>. */
@@ -124,11 +130,6 @@ function describeSide(
   }
 }
 
-export function ordinal(n: number): string {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
-}
 
 export function slotState(p: SlotProjection) {
   return p.state;

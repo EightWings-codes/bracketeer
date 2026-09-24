@@ -74,8 +74,11 @@ delay figure (`fmtDelay`) sits next to it once `delaySec > 60`.
 Between rounds it counts down to the *next* round's start instead, captioned
 "next round in".
 
-With `manualRounds` there is no timer to run: it switches to elapsed-since-
-start, dimmed, and the `schedule` view drops its clock times too.
+With `manualRounds` it reads `v.clock` (`roundClock` in `src/lib/schedule.ts`)
+instead: "time left" counts from the round's Start to start + game length,
+"break" from its Stop to stop + break length, "starts in" to the tournament
+start. All three hold at 00:00 rather than running negative — nothing moves
+until the organiser presses the next button.
 
 ### QR (`qr=on|off`, default on)
 
@@ -163,8 +166,9 @@ The cadence is *end of round → break → next start*: with 10-minute games, a
 semis start 20:16, the final 20:31. Start times, not end times — "when do I
 play?" is the question people ask a screen.
 
-Under `manualRounds` the times disappear and it becomes an ordered round list
-with counts.
+Under `manualRounds` the times stay — they are the same projection, so they
+follow every Start and Stop — but the "late" labels are dropped: the organiser
+sets the pace, so a delay is not news.
 
 ## 6. Modes
 
@@ -247,7 +251,8 @@ The whole surface is the query string — one screen, one URL, no saved state:
 | `map` | `on` \| `off` | on when `venueImageUrl` is set |
 | `band` | `on` \| `off` | `on` |
 | `standings` | `auto` \| `groups` \| `bracket` | `auto` |
-| `contrast` | `normal` \| `high` | `normal` |
+| `look` | `midnight` · `slate` · `dusk` · `forest` · `ember` · `paper` · `daylight` · `tuermli` · `contrast` | `midnight` |
+| `contrast` | `high` — the older spelling of `look=contrast`; `look` wins | — |
 | `scale` | `0.8`–`1.4` type scale | `1` |
 | `inset` | `0`–`5` (% safe area, for beamers that crop edges) | `0` |
 | `msg` | free text in the band | — |
@@ -263,8 +268,17 @@ venue fields.
 
 The details that decide whether it is usable in a real hall:
 
-- Own palette — near-black background, high-chroma accents. The current
-  `zinc-50` page washes out under a beamer. `contrast=high` for bad projectors.
+- Its own palette, not the site's: the `zinc-50` page washes out under a beamer.
+  Eight looks ship — five dark (Midnight, Slate, Dusk, Forest, Ember), two
+  light (Paper, Daylight, for a bright room or a TV) and High contrast for a
+  weak lamp. A look is one block of custom properties in `globals.css` under
+  `[data-look="…"]` plus a row in `BOARD_LOOKS`, so adding one is a five-minute
+  job. Swatches for all of them sit in the settings panel.
+- A look can be built around a picture: **Türmli** puts the house drawing from
+  `public/board/tuermli.jpg` under the whole board as a watermark, with
+  translucent panels so it keeps showing through, and a palette sampled from
+  the drawing itself — its ink runs at hue 30°, and the accent is that hue
+  taken down until a name reads against it.
 - Cursor hides after 3 s idle; `f` toggles fullscreen.
 - Screen Wake Lock, so the laptop does not sleep mid-tournament.
 - Long team names shrink to fit; nothing is silently ellipsed into

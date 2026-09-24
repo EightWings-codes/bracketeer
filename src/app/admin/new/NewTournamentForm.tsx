@@ -3,12 +3,12 @@
 import ActionForm from "@/components/ActionForm";
 import { inputCls } from "@/components/ui";
 import ThemePicker from "@/components/ThemePicker";
+import LocalDateTimeInput from "@/components/LocalDateTimeInput";
 import { createTournamentAction } from "../actions";
 
 export default function NewTournamentForm() {
   const defaultStart = new Date(Date.now() + 7 * 86400000);
   defaultStart.setMinutes(0, 0, 0);
-  const local = new Date(defaultStart.getTime() - defaultStart.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   return (
     <ActionForm
       action={createTournamentAction}
@@ -25,7 +25,7 @@ export default function NewTournamentForm() {
       <label className="text-sm font-medium">Theme</label>
       <ThemePicker />
       <label className="text-sm font-medium">Starts at</label>
-      <input name="startsAt" type="datetime-local" required defaultValue={local} className={inputCls} />
+      <LocalDateTimeInput name="startsAt" iso={defaultStart.toISOString()} required className={inputCls} />
       <div className="grid grid-cols-3 gap-3">
         <label className="text-sm">
           <span className="block font-medium">Game (min)</span>
@@ -56,7 +56,7 @@ export default function NewTournamentForm() {
       </label>
       <input name="scoreLabel" placeholder="from the theme" className={inputCls} />
       <label className="flex items-center gap-2 text-sm">
-        <input name="manualRounds" type="checkbox" /> Manual rounds (no timer — you start and stop each round)
+        <input name="manualRounds" type="checkbox" /> Manual rounds (timers wait at zero — nothing moves until you start or stop a round)
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input name="testMode" type="checkbox" /> Test mode (simulator enabled, hidden from the public list)

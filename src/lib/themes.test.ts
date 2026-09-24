@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_THEME, findIcon, findTheme, isValidIcon, tableLabel, THEMES } from "./themes";
+import { DEFAULT_THEME, findIcon, findTheme, isValidIcon, pickIcon, tableLabel, THEMES } from "./themes";
 
 describe("themes", () => {
   it("ships the three themes with unique ids and non-empty icon sets", () => {
@@ -36,5 +36,34 @@ describe("themes", () => {
     expect(findTheme("toeggele").defaults.allowDraws).toBe(true);
     expect(findTheme("beerpong").defaults.allowDraws).toBe(false);
     expect(findTheme("beerpong").defaults.scoreLabel).toBe("Cups");
+  });
+});
+
+describe("emblem assignment", () => {
+  const taken: Array<string | null> = [];
+  it("keeps an explicit, valid pick", () => {
+    expect(pickIcon("beerpong", "calanda", taken)).toBe("calanda");
+  });
+
+  it("assigns one when nothing was picked, so nobody is faceless", () => {
+    const got = pickIcon("beerpong", null, taken, () => 0);
+    expect(isValidIcon("beerpong", got)).toBe(true);
+  });
+
+  it("ignores a pick from another theme and assigns instead", () => {
+    // "rot" is a töggele colour, not a brewery.
+    const got = pickIcon("beerpong", "rot", taken, () => 0);
+    expect(got).not.toBe("rot");
+    expect(isValidIcon("beerpong", got)).toBe(true);
+  });
+
+  it("prefers emblems nobody has yet, then falls back to reuse", () => {
+    const all = findTheme("toeggele").icons.map((i) => i.id);
+    // Everything but the last is taken: the free one must win regardless of rng.
+    const used = all.slice(0, -1);
+    expect(pickIcon("toeggele", null, used, () => 0)).toBe(all[all.length - 1]);
+    expect(pickIcon("toeggele", null, used, () => 0.99)).toBe(all[all.length - 1]);
+    // Once every emblem is taken it has to repeat rather than fail.
+    expect(isValidIcon("toeggele", pickIcon("toeggele", null, all, () => 0.99))).toBe(true);
   });
 });

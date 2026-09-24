@@ -71,7 +71,13 @@ export default async function TeamPage({
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
                 <div className="text-sm text-zinc-500">
                   Round ends in{" "}
-                  <Countdown targetIso={m.projection.projectedEnd.toISOString()} serverNowIso={nowIso} className="font-semibold tabular-nums" />
+                  <Countdown
+                    targetIso={(v.manualRounds && v.clock.phase === "game" ? v.clock.endsAt : m.projection.projectedEnd).toISOString()}
+                    serverNowIso={nowIso}
+                    stopAtZero={v.manualRounds}
+                    overrunLabel={v.manualRounds ? "" : "over"}
+                    className="font-semibold tabular-nums"
+                  />
                 </div>
                 {m.status !== "CONFIRMED" && (
                   <ScoreForm
@@ -99,12 +105,13 @@ export default async function TeamPage({
           <div className="text-zinc-500">
             {nextMatch.slotLabel} · {v.tableLabel(nextMatch.tableNo)} · ~
             <LocalTime iso={nextMatch.projection.projectedStart.toISOString()} />
-            {nextMatch.projection.delaySec > 60 && <span className="ml-1 text-amber-600">({fmtDelay(nextMatch.projection.delaySec)})</span>}
+            {!v.manualRounds && nextMatch.projection.delaySec > 60 && <span className="ml-1 text-amber-600">({fmtDelay(nextMatch.projection.delaySec)})</span>}
           </div>
           <Countdown
             targetIso={nextMatch.projection.projectedStart.toISOString()}
             serverNowIso={nowIso}
             className="mt-2 block text-4xl font-bold tabular-nums"
+            stopAtZero={v.manualRounds}
             overrunLabel="starting soon"
           />
         </section>

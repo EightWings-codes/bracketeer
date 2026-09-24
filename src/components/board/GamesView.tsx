@@ -112,7 +112,7 @@ function Then({
       <div className="t-xs board-dim mb-[0.8vh] flex items-baseline gap-[1vh] uppercase tracking-widest">
         <span>Then</span>
         <span className="truncate normal-case tracking-normal">{slot?.label}</span>
-        {slot && !v.manualRounds && (
+        {slot && (
           <span className="ml-auto tabular-nums">
             <LocalTime iso={slot.projection.projectedStart.toISOString()} />
           </span>

@@ -7,6 +7,9 @@ import { requireAdmin } from "@/lib/admin-guard";
 import type { Stage } from "@/lib/bracket";
 import { prisma } from "@/lib/prisma";
 import { seededRng, randomSeed } from "@/lib/rng";
+import { customFormat, isCustom } from "@/lib/formats";
+import { STAGES } from "@/lib/bracket";
+import { parseStageTiming, type StageTimingMap } from "@/lib/stage-timing";
 import * as sim from "@/lib/simulator";
 import {
   confirmMatch,
@@ -17,9 +20,12 @@ import {
   deleteTeam,
   deleteTournament,
   DomainError,
+  formatOf,
   generateTournamentPlan,
   newJoinCode,
+  nudgeSlotClock,
   resetPlan,
+  setStageTiming,
   setTournamentStatus,
   type TournamentStatusName,
   startSlot,
@@ -208,19 +214,58 @@ export const addTeamAction = action(async (fd, adminId) => {
 export const generatePlanAction = action(async (fd, adminId) => {
   const id = await tournamentId(fd);
   const formatId = need(str(fd, "formatId"), "Pick a format.");
+  const format = isCustom(formatId) ? await buildCustom(fd, id) : formatId;
   const seed = num(fd, "seed");
-  const { seed: used } = await generateTournamentPlan(id, formatId, adminId, {
+  const { seed: used } = await generateTournamentPlan(id, format, adminId, {
     seed: seed ?? undefined,
     force: bool(fd, "force") === true,
   });
   return `Plan generated (draw seed ${used}).`;
 });
 
+/** A hand-built format: the group layout and the playoff size are separate choices. */
+async function buildCustom(fd: FormData, tournamentId: string) {
+  const teamCount = await prisma.team.count({ where: { tournamentId, status: "CONFIRMED" } });
+  return customFormat({
+    teamCount,
+    groupCount: need(num(fd, "groupCount"), "Pick a group layout."),
+    playoffSize: need(num(fd, "playoffSize"), "Pick a playoff size."),
+    thirdPlaceMatch: bool(fd, "thirdPlace") === true,
+    elimination: str(fd, "elimination") === "DOUBLE" ? "DOUBLE" : "SINGLE",
+  });
+}
+
+export const updateStageTimingAction = action(async (fd, adminId) => {
+  const id = await tournamentId(fd);
+  const map: StageTimingMap = parseStageTiming(
+    await prisma.tournament.findUnique({ where: { id }, select: { stageTiming: true } }).then((t) => t?.stageTiming),
+  );
+  // Minutes in, seconds out; an empty box means "use the tournament default".
+  for (const stage of STAGES) {
+    for (const [field, key] of [
+      ["gameSec", `game_${stage}`],
+      ["breakSec", `break_${stage}`],
+      ["breakAfterStageSec", `after_${stage}`],
+    ] as const) {
+      const min = num(fd, key);
+      if (min === undefined) continue;
+      const entry = { ...(map[stage] ?? {}) };
+      if (min === null) delete entry[field];
+      else entry[field] = Math.round(min * 60);
+      map[stage] = entry;
+    }
+  }
+  await setStageTiming(id, map, adminId);
+  return "Stage timing saved.";
+});
+
 export const redrawAction = action(async (fd, adminId) => {
   const id = await tournamentId(fd);
-  const t = await prisma.tournament.findUnique({ where: { id }, select: { formatId: true } });
+  const t = await prisma.tournament.findUnique({ where: { id }, select: { formatId: true, formatConfig: true } });
   const formatId = need(t?.formatId, "No format chosen yet.");
-  const { seed } = await generateTournamentPlan(id, formatId, adminId, { seed: randomSeed(), force: bool(fd, "force") === true });
+  // A hand-built format has no preset to look up — re-draw the stored config.
+  const format = isCustom(formatId) ? need(formatOf(t!), "This plan has no stored format.") : formatId;
+  const { seed } = await generateTournamentPlan(id, format, adminId, { seed: randomSeed(), force: bool(fd, "force") === true });
   return `Re-drawn (seed ${seed}).`;
 });
 
@@ -237,6 +282,12 @@ export const startSlotAction = action(async (fd, adminId) => {
 
 export const stopSlotAction = action(async (fd, adminId) => {
   await stopSlot(need(str(fd, "slotId"), "Missing round."), adminId);
+});
+
+export const nudgeClockAction = action(async (fd, adminId) => {
+  const timer = str(fd, "timer") === "break" ? "break" : "game";
+  const delta = need(num(fd, "deltaSec"), "Missing amount.");
+  await nudgeSlotClock(need(str(fd, "slotId"), "Missing round."), timer, delta, adminId);
 });
 
 export const resetSlotClockAction = action(async (fd, adminId) => {

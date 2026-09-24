@@ -8,7 +8,8 @@
  * their emblem from, and which flourish the registration phase plays.
  *
  * On the beer names: these are labels players recognise, drawn as a monogram
- * in a colour of our own choosing. No brewery's logo, wordmark or artwork is
+ * on a solid colour of our own choosing, with the brewery's name shown beside
+ * it wherever there is room. No brewery's logo, wordmark or artwork is
  * reproduced, and nothing here implies any of them are involved.
  */
 
@@ -19,6 +20,39 @@ export interface ThemeIcon {
   mark: string;
   /** Badge colours, light and dark. */
   tone: string;
+  /**
+   * Original emblem artwork under /public. Drawn here rather than taken from
+   * anyone: a generic object evoking the name — a castle, a peak, an acorn —
+   * never a brewery's own logo or wordmark. Falls back to the monogram.
+   */
+  art?: string;
+}
+
+/**
+ * Whether the label carries the meaning. A brewery badge is only useful if it
+ * says which brewery; "Circle" on a circle is noise.
+ */
+export function iconLabelIsMeaningful(theme: Theme): boolean {
+  return theme.id === "beerpong";
+}
+
+/**
+ * The emblem a team ends up with. An explicit valid pick wins; otherwise one
+ * is assigned, preferring emblems nobody in this tournament has yet so teams
+ * stay tellable apart. Falls back to reuse once the set is exhausted.
+ */
+export function pickIcon(
+  themeId: string | null | undefined,
+  requested: string | null | undefined,
+  taken: Array<string | null>,
+  rng: () => number = Math.random,
+): string {
+  const theme = findTheme(themeId);
+  if (requested && isValidIcon(theme.id, requested)) return requested;
+  const used = new Set(taken.filter(Boolean) as string[]);
+  const free = theme.icons.filter((i) => !used.has(i.id));
+  const pool = free.length > 0 ? free : theme.icons;
+  return pool[Math.floor(rng() * pool.length) % pool.length]!.id;
 }
 
 export interface Theme {
@@ -43,6 +77,15 @@ export interface Theme {
 }
 
 const neutral = (id: string, label: string, mark: string, tone: string): ThemeIcon => ({ id, label, mark, tone });
+
+/** Beer pong emblems ship with drawn artwork; the rest are glyphs. */
+const brewed = (id: string, label: string, mark: string, tone: string): ThemeIcon => ({
+  id,
+  label,
+  mark,
+  tone,
+  art: `/emblems/beerpong/${id}.svg`,
+});
 
 export const THEMES: Theme[] = [
   {
@@ -77,18 +120,18 @@ export const THEMES: Theme[] = [
     defaults: { scoreLabel: "Cups", allowDraws: false },
     tableWord: "Table",
     icons: [
-      neutral("feldschloesschen", "Feldschlösschen", "FS", "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"),
-      neutral("calanda", "Calanda", "CA", "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300"),
-      neutral("quoellfrisch", "Quöllfrisch", "QF", "bg-lime-100 text-lime-800 dark:bg-lime-950 dark:text-lime-300"),
-      neutral("cardinal", "Cardinal", "CD", "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"),
-      neutral("eichhof", "Eichhof", "EH", "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"),
-      neutral("schuetzengarten", "Schützengarten", "SG", "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"),
-      neutral("rugenbraeu", "Rugenbräu", "RB", "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"),
-      neutral("falken", "Falken", "FK", "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300"),
-      neutral("valaisanne", "Valaisanne", "VL", "bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300"),
-      neutral("chopfab", "Chopfab", "CF", "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"),
-      neutral("monstein", "Monstein", "MO", "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300"),
-      neutral("boxer", "Boxer", "BX", "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300"),
+      brewed("feldschloesschen", "Feldschlösschen", "FS", "bg-red-700 text-white"),
+      brewed("calanda", "Calanda", "CA", "bg-blue-700 text-white"),
+      brewed("quoellfrisch", "Quöllfrisch", "QF", "bg-lime-600 text-white"),
+      brewed("cardinal", "Cardinal", "CD", "bg-rose-700 text-white"),
+      brewed("eichhof", "Eichhof", "EH", "bg-amber-600 text-white"),
+      brewed("schuetzengarten", "Schützengarten", "SG", "bg-emerald-700 text-white"),
+      brewed("rugenbraeu", "Rugenbräu", "RB", "bg-indigo-700 text-white"),
+      brewed("falken", "Falken", "FK", "bg-orange-600 text-white"),
+      brewed("valaisanne", "Valaisanne", "VL", "bg-yellow-400 text-yellow-950"),
+      brewed("chopfab", "Chopfab", "CF", "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"),
+      brewed("monstein", "Monstein", "MO", "bg-teal-600 text-white"),
+      brewed("boxer", "Boxer", "BX", "bg-violet-700 text-white"),
     ],
   },
   {

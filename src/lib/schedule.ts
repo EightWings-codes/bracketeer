@@ -107,3 +107,54 @@ export function overallDelaySec(projection: SlotProjection[]): number {
   }
   return max;
 }
+
+/**
+ * The one timer manual rounds show. Nothing here moves a round — the organiser
+ * still starts and stops each one — it only says what the room is waiting on:
+ *
+ *   game      a round is running: counts to its start + game length
+ *   break     the last round was stopped: counts to its stop + break length
+ *   prestart  nothing has started yet: counts to the tournament start
+ *   idle      every round has been played
+ *
+ * The target is fixed once it is set — it never drifts with the wall clock the
+ * way a projection does — so the display can stop at zero and wait there.
+ */
+export type RoundClock =
+  | { phase: "game"; index: number; endsAt: Date }
+  | { phase: "break"; afterIndex: number; nextIndex: number; endsAt: Date }
+  | { phase: "prestart"; nextIndex: number; endsAt: Date }
+  | { phase: "idle" };
+
+export function roundClock(startsAt: Date, slots: SlotInput[]): RoundClock {
+  const ordered = [...slots].sort((a, b) => a.index - b.index);
+
+  const running = ordered.find((s) => s.startedAt && !s.endedAt);
+  if (running) {
+    return {
+      phase: "game",
+      index: running.index,
+      endsAt: new Date(running.startedAt!.getTime() + running.durationSec * 1000),
+    };
+  }
+
+  const next = ordered.find((s) => !s.startedAt);
+  if (!next) return { phase: "idle" };
+  const pinned = next.plannedStartOverride?.getTime() ?? 0;
+
+  // The break belongs to whichever round was stopped last, not the one with
+  // the highest number — rounds can be run out of order.
+  let last: SlotInput | null = null;
+  for (const s of ordered) {
+    if (s.endedAt && (!last || s.endedAt.getTime() >= last.endedAt!.getTime())) last = s;
+  }
+  if (!last) {
+    return { phase: "prestart", nextIndex: next.index, endsAt: new Date(Math.max(startsAt.getTime(), pinned)) };
+  }
+  return {
+    phase: "break",
+    afterIndex: last.index,
+    nextIndex: next.index,
+    endsAt: new Date(Math.max(last.endedAt!.getTime() + last.breakAfterSec * 1000, pinned)),
+  };
+}

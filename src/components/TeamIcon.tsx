@@ -1,16 +1,24 @@
-import { findIcon } from "@/lib/themes";
+import { findIcon, findTheme, iconLabelIsMeaningful } from "@/lib/themes";
 
-/** A team's emblem, or nothing at all when they never picked one. */
+/**
+ * A team's emblem. Where the label carries the meaning — a brewery, say — the
+ * name is shown beside the badge, because "FS" alone tells nobody which beer
+ * the team picked. Sets where the badge *is* the meaning (a red circle) stay
+ * as a badge only.
+ */
 export default function TeamIcon({
   theme,
   icon,
   size = "sm",
+  withLabel = false,
   className = "",
 }: {
   theme: string;
   icon: string | null;
   /** `xl` and `2xl` are sized in vh, for the projector board. */
   size?: "sm" | "md" | "lg" | "xl" | "2xl";
+  /** Show the emblem's name when the theme's names mean something. */
+  withLabel?: boolean;
   className?: string;
 }) {
   const found = findIcon(theme, icon);
@@ -22,13 +30,32 @@ export default function TeamIcon({
     xl: "h-[3.4vh] w-[3.4vh] text-[1.5vh]",
     "2xl": "h-[5.5vh] w-[5.5vh] text-[2.4vh]",
   }[size];
-  return (
-    <span
-      title={found.label}
-      className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold leading-none ${box} ${found.tone} ${className}`}
-    >
+
+  const shell = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold leading-none ${box} ${withLabel ? "" : className}`;
+
+  // Drawn artwork where a theme has it; the coloured monogram otherwise.
+  const badge = found.art ? (
+    <span title={found.label} className={shell}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- a static, already-sized SVG */}
+      <img src={found.art} alt="" aria-hidden="true" className="h-full w-full" />
+      <span className="sr-only">{found.label}</span>
+    </span>
+  ) : (
+    <span title={found.label} className={`${shell} ${found.tone}`}>
       <span aria-hidden="true">{found.mark}</span>
       <span className="sr-only">{found.label}</span>
+    </span>
+  );
+
+  if (!withLabel || !iconLabelIsMeaningful(findTheme(theme))) return badge;
+
+  const text = { sm: "text-[10px]", md: "text-xs", lg: "text-sm", xl: "text-[1.3vh]", "2xl": "text-[1.8vh]" }[size];
+  return (
+    <span className={`inline-flex min-w-0 items-center gap-1.5 ${className}`}>
+      {badge}
+      <span className={`truncate font-medium text-zinc-500 dark:text-zinc-400 ${text}`} aria-hidden="true">
+        {found.label}
+      </span>
     </span>
   );
 }

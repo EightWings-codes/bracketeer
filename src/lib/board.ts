@@ -39,6 +39,7 @@ export const BOARD_LOOKS: BoardLook[] = [
   { id: "ember", label: "Ember", blurb: "Warm brown, orange accent", scheme: "dark", swatch: ["#1c0f0a", "#fb923c"] },
   { id: "paper", label: "Paper", blurb: "Warm off-white, ink on the page", scheme: "light", swatch: ["#faf7f0", "#047857"] },
   { id: "daylight", label: "Daylight", blurb: "Bright white — for a lit room", scheme: "light", swatch: ["#ffffff", "#0284c7"] },
+  { id: "tuermli", label: "Türmli", blurb: "The house drawing, in its own sepia", scheme: "light", swatch: ["#f8f0e4", "#865727"] },
   { id: "contrast", label: "High contrast", blurb: "Pure black and white — weak beamer", scheme: "dark", swatch: ["#000000", "#4ade80"] },
 ];
 
@@ -224,7 +225,8 @@ export interface ScheduleRow {
   /** Round number as a player counts them, 1-based. */
   number: number;
   state: SlotProjection["state"];
-  /** Start of the round, break included. Null under manual rounds. */
+  /** Start of the round, break included — projected, so it moves as rounds
+   *  run long or short, manual rounds included. */
   startIso: string | null;
   /** Only set for the round that is running: when it is due to end. */
   endIso: string | null;
@@ -251,9 +253,10 @@ export function scheduleRows(
       label: s.label,
       number: s.index + 1,
       state: s.projection.state,
-      startIso: opts.manualRounds ? null : s.projection.projectedStart.toISOString(),
-      endIso: opts.manualRounds || s.projection.state !== "running" ? null : s.projection.projectedEnd.toISOString(),
-      delaySec: s.projection.delaySec,
+      startIso: s.projection.projectedStart.toISOString(),
+      endIso: s.projection.state !== "running" ? null : s.projection.projectedEnd.toISOString(),
+      // Manual rounds go at the organiser's pace, so "late" is not news there.
+      delaySec: opts.manualRounds ? 0 : s.projection.delaySec,
       games: gamesPerSlot(s.id),
     }));
 }

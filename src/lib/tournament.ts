@@ -4,15 +4,17 @@
  * rather than trusting the caller.
  */
 import { randomBytes } from "node:crypto";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma";
 import { APP } from "./config";
 import { generatePlan, type PlanSource, type Stage, type TeamRef } from "./bracket";
 import { findPreset, type FormatConfig } from "./formats";
 import { randomSeed, seededRng } from "./rng";
 import { normaliseMembers, rosterProblem, sizeBoundsProblem } from "./roster";
-import { findTheme, isValidIcon } from "./themes";
+import { findTheme, isValidIcon, pickIcon } from "./themes";
 import { resolveSources, type ResolvableMatch } from "./resolve";
+import { parseStageTiming, pruneStageTiming, slotTimings, type StageTimingMap } from "./stage-timing";
 import { projectSchedule, type SlotInput, type SlotProjection } from "./schedule";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -218,7 +220,10 @@ export async function registerTeam(tournamentId: string, input: RegisterInput, g
   const dup = await prisma.team.findUnique({ where: { tournamentId_name: { tournamentId, name } } });
   if (dup) fail("A team with that name is already registered.");
 
-  const icon = input.icon && isValidIcon(t.theme, input.icon) ? input.icon : null;
+  // Nobody should end up faceless: an unpicked emblem is assigned, favouring
+  // one no other team here has.
+  const taken = await prisma.team.findMany({ where: { tournamentId }, select: { icon: true } });
+  const icon = pickIcon(t.theme, input.icon, taken.map((x) => x.icon));
   const team = await prisma.team.create({
     data: { tournamentId, name, members, contact: input.contact ?? null, icon, token: newToken() },
   });
@@ -262,7 +267,8 @@ export async function confirmedTeamRefs(db: Db, tournamentId: string): Promise<T
  */
 export async function generateTournamentPlan(
   tournamentId: string,
-  formatId: string,
+  /** A preset id, or a config built by hand on the format page. */
+  formatOrId: string | FormatConfig,
   actorId: string,
   opts: { seed?: number; force?: boolean } = {},
 ) {
@@ -270,7 +276,9 @@ export async function generateTournamentPlan(
   if (t.status !== "LOCKED" && t.status !== "READY" && t.status !== "RUNNING") {
     fail("Lock the field before generating a plan.");
   }
-  const format = findPreset(formatId) ?? fail("Unknown format.");
+  const format =
+    typeof formatOrId === "string" ? (findPreset(formatOrId) ?? fail("Unknown format.")) : formatOrId;
+  const formatId = format.id;
   const started = await prisma.slot.count({ where: { tournamentId, startedAt: { not: null } } });
   if (started > 0 && !opts.force) fail("A round has already started. Use the danger zone to force regeneration.");
 
@@ -391,10 +399,47 @@ export async function updateSlot(slotId: string, patch: Prisma.SlotUpdateInput, 
   await audit(prisma, s!.tournamentId, actorId, "slot.update", { slotId, ...(patch as object) } as Prisma.InputJsonValue);
 }
 
+/**
+ * Stretch or shorten a live timer without opening the round's settings: the
+ * game clock is the running round's length, the break clock is the break
+ * after the round that was just stopped. Either way it lands on that round's
+ * own override, so the rest of the plan keeps its numbers.
+ */
+export async function nudgeSlotClock(
+  slotId: string,
+  timer: "game" | "break",
+  deltaSec: number,
+  actorId: string,
+) {
+  const s = await prisma.slot.findUnique({
+    where: { id: slotId },
+    include: { tournament: { include: { slots: true } } },
+  });
+  if (!s) fail("Round not found.");
+  const own = slotInputs(s!.tournament, s!.tournament.slots).find((x) => x.index === s!.index)!;
+  const patch: Prisma.SlotUpdateInput =
+    timer === "game"
+      ? { durationSecOverride: Math.max(60, own.durationSec + deltaSec) }
+      : { breakAfterSecOverride: Math.max(0, own.breakAfterSec + deltaSec) };
+  await prisma.slot.update({ where: { id: slotId }, data: patch });
+  await audit(prisma, s!.tournamentId, actorId, "slot.nudge", { slotId, timer, deltaSec });
+}
+
+export interface ClockTournament {
+  gameDurationSec: number;
+  breakDurationSec: number;
+  stageTiming?: unknown;
+}
+
+/**
+ * Slot durations for the projection: the slot's own override first, then the
+ * stage clock, then the tournament defaults.
+ */
 export function slotInputs(
-  t: { gameDurationSec: number; breakDurationSec: number },
+  t: ClockTournament,
   slots: Array<{
     index: number;
+    stage: Stage;
     startedAt: Date | null;
     endedAt: Date | null;
     durationSecOverride: number | null;
@@ -402,18 +447,36 @@ export function slotInputs(
     plannedStartOverride: Date | null;
   }>,
 ): SlotInput[] {
-  return slots.map((s) => ({
-    index: s.index,
-    startedAt: s.startedAt,
-    endedAt: s.endedAt,
-    durationSec: s.durationSecOverride ?? t.gameDurationSec,
-    breakAfterSec: s.breakAfterSecOverride ?? t.breakDurationSec,
-    plannedStartOverride: s.plannedStartOverride,
-  }));
+  const byStage = slotTimings(slots, parseStageTiming(t.stageTiming), t);
+  return slots.map((s) => {
+    const staged = byStage.get(s.index)!;
+    return {
+      index: s.index,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt,
+      durationSec: s.durationSecOverride ?? staged.durationSec,
+      breakAfterSec: s.breakAfterSecOverride ?? staged.breakAfterSec,
+      plannedStartOverride: s.plannedStartOverride,
+    };
+  });
+}
+
+/**
+ * Replace the per-stage clock. Values are minutes-as-seconds already; an entry
+ * that matches the tournament default is simply left out by pruneStageTiming,
+ * so "reset to default" is expressed by clearing the field.
+ */
+export async function setStageTiming(tournamentId: string, map: StageTimingMap, actorId: string) {
+  const pruned = pruneStageTiming(map);
+  await prisma.tournament.update({
+    where: { id: tournamentId },
+    data: { stageTiming: pruned === null ? Prisma.DbNull : (pruned as Prisma.InputJsonValue) },
+  });
+  await audit(prisma, tournamentId, actorId, "tournament.stageTiming", (pruned ?? {}) as Prisma.InputJsonValue);
 }
 
 export function projectionByIndex(
-  t: { startsAt: Date; gameDurationSec: number; breakDurationSec: number },
+  t: ClockTournament & { startsAt: Date },
   slots: Parameters<typeof slotInputs>[1],
   now: Date,
 ): Map<number, SlotProjection> {

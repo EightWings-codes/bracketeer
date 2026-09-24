@@ -37,12 +37,17 @@ export default function IconPicker({
               onChange={() => setPicked(i.id)}
               className="sr-only"
             />
-            <span
-              aria-hidden="true"
-              className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold ${i.tone}`}
-            >
-              {i.mark}
-            </span>
+            {i.art ? (
+              // eslint-disable-next-line @next/next/no-img-element -- static SVG
+              <img src={i.art} alt="" aria-hidden="true" className="h-7 w-7 rounded-full" />
+            ) : (
+              <span
+                aria-hidden="true"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold ${i.tone}`}
+              >
+                {i.mark}
+              </span>
+            )}
             <span className={on ? "font-medium" : "text-zinc-600 dark:text-zinc-400"}>{i.label}</span>
           </label>
         );

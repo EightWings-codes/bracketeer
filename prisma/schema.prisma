@@ -94,8 +94,9 @@ model Tournament {
   minTeamSize Int @default(1)
   maxTeamSize Int @default(8)
 
-  // Clock. manualRounds drops the timer entirely: rounds only move when an
-  // organiser starts and stops them, and no times are shown or projected.
+  // Clock. manualRounds keeps the timers but never lets them run past zero:
+  // the game timer runs from each Start, the break timer from each Stop, and
+  // the projected times follow — see roundClock in src/lib/schedule.ts.
   startsAt         DateTime
   gameDurationSec  Int      @default(1200)
   breakDurationSec Int      @default(300)

@@ -60,7 +60,7 @@ export default function ScheduleView({
   return (
     <div className="flex h-full flex-col gap-[1vh]">
       <h2 className={`${compact ? "t-sm" : "t-md"} shrink-0 font-bold uppercase tracking-wide`}>
-        {v.manualRounds ? "Rounds" : "Coming up"}
+        Coming up
       </h2>
       <ol
         className="grid min-h-0 flex-1 auto-rows-min content-start gap-[0.8vh]"
@@ -111,8 +111,10 @@ export default function ScheduleView({
                 <span className="shrink-0 text-right">
                   <span className="t-xs board-dim block uppercase tracking-widest">ends in</span>
                   <Countdown
-                    targetIso={r.endIso}
+                    targetIso={v.manualRounds && v.clock.phase === "game" ? v.clock.endsAt.toISOString() : r.endIso}
                     serverNowIso={v.now.toISOString()}
+                    stopAtZero={v.manualRounds}
+                    overrunLabel={v.manualRounds ? "" : "over"}
                     className={`${roundSize} font-bold tabular-nums`}
                   />
                 </span>

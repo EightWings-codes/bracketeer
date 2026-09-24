@@ -22,15 +22,16 @@ export default function Countdown({
   serverNowIso,
   className,
   overrunLabel = "over",
-  countUp = false,
+  stopAtZero = false,
 }: {
   targetIso: string;
   serverNowIso: string;
   className?: string;
   overrunLabel?: string;
-  /** Count away from a moment already past — a manual round has no end to
-   *  count towards, only a start to count from. */
-  countUp?: boolean;
+  /** Hold at 00:00 instead of running into the negative — a manual round's
+   *  timer is a guide, and nothing happens until the organiser acts. The
+   *  overrun label still shows, so "time's up" reads as a state, not a glitch. */
+  stopAtZero?: boolean;
 }) {
   const [skew] = useState(() => new Date(serverNowIso).getTime() - Date.now());
   const target = new Date(targetIso).getTime();
@@ -45,8 +46,10 @@ export default function Countdown({
 
   return (
     <span className={className} suppressHydrationWarning>
-      {fmt(countUp ? -remaining : remaining)}
-      {!countUp && remaining < 0 && <span className="ml-2 text-base font-normal text-red-500">{overrunLabel}</span>}
+      {fmt(stopAtZero ? Math.max(0, remaining) : remaining)}
+      {(stopAtZero ? remaining <= 0 : remaining < 0) && overrunLabel && (
+        <span className="ml-2 text-base font-normal text-red-500">{overrunLabel}</span>
+      )}
     </span>
   );
 }

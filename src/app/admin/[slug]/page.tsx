@@ -7,6 +7,7 @@ import { fmtDelay, loadTournamentView } from "@/lib/view";
 import AutoRefresh from "@/components/AutoRefresh";
 import Countdown from "@/components/Countdown";
 import LocalTime from "@/components/LocalTime";
+import LocalDateTimeInput from "@/components/LocalDateTimeInput";
 import MatchRow from "@/components/MatchRow";
 import QrCode from "@/components/QrCode";
 import StatusBadge from "@/components/StatusBadge";
@@ -15,6 +16,7 @@ import { inputCls } from "@/components/ui";
 import {
   confirmMatchAction,
   newJoinCodeAction,
+  nudgeClockAction,
   setStatusAction,
   startSlotAction,
   stopSlotAction,
@@ -27,6 +29,9 @@ export default async function ControlRoom({ params }: { params: Promise<{ slug: 
   const v = await loadTournamentView(slug);
   if (!v) notFound();
   const nowIso = v.now.toISOString();
+  const clock = v.clock;
+  // The break timer belongs to the round that was just stopped.
+  const breakSlot = clock.phase === "break" ? v.slots.find((x) => x.index === clock.afterIndex) : undefined;
   const publicUrl = await publicTournamentUrl(slug);
   const audit = await prisma.auditLog.findMany({ where: { tournamentId: v.id }, orderBy: { createdAt: "desc" }, take: 20 });
   const pending = v.teams.filter((t) => t.status === "PENDING").length;
@@ -168,9 +173,16 @@ export default async function ControlRoom({ params }: { params: Promise<{ slug: 
                 <div key={s.id} className="mb-3">
                   <div className="text-xl font-semibold">{s.label}</div>
                   {v.manualRounds ? (
-                    <div className="text-sm text-zinc-500">
-                      round {s.index + 1} of {v.slots.length} · runs until you stop it
-                    </div>
+                    <>
+                      <Countdown
+                        targetIso={(v.clock.phase === "game" && v.clock.index === s.index ? v.clock.endsAt : s.projection.projectedEnd).toISOString()}
+                        serverNowIso={nowIso}
+                        stopAtZero
+                        overrunLabel="time's up"
+                        className="text-5xl font-bold tabular-nums"
+                      />
+                      <Nudge slug={slug} slotId={s.id} timer="game" />
+                    </>
                   ) : (
                     <Countdown targetIso={s.projection.projectedEnd.toISOString()} serverNowIso={nowIso} className="text-5xl font-bold tabular-nums" />
                   )}
@@ -185,14 +197,29 @@ export default async function ControlRoom({ params }: { params: Promise<{ slug: 
               {v.next ? (
                 <div>
                   <div className="text-xl font-semibold">{v.next.label}</div>
-                  {!v.manualRounds && (
+                  <div className="text-sm text-zinc-500">
+                    planned ~<LocalTime iso={v.next.projection.projectedStart.toISOString()} />
+                    {!v.manualRounds && v.next.projection.delaySec > 60 && ` (${fmtDelay(v.next.projection.delaySec)})`}
+                  </div>
+                  {!v.manualRounds ? (
+                    <Countdown targetIso={v.next.projection.projectedStart.toISOString()} serverNowIso={nowIso} className="text-3xl font-bold tabular-nums" overrunLabel="ready" />
+                  ) : v.clock.phase === "break" || v.clock.phase === "prestart" ? (
                     <>
-                      <div className="text-sm text-zinc-500">
-                        planned ~<LocalTime iso={v.next.projection.projectedStart.toISOString()} />
-                        {v.next.projection.delaySec > 60 && ` (${fmtDelay(v.next.projection.delaySec)})`}
-                      </div>
-                      <Countdown targetIso={v.next.projection.projectedStart.toISOString()} serverNowIso={nowIso} className="text-3xl font-bold tabular-nums" overrunLabel="ready" />
+                      <div className="mt-1 text-xs uppercase text-zinc-500">{v.clock.phase === "break" ? "Break" : "Starts in"}</div>
+                      <Countdown
+                        targetIso={v.clock.endsAt.toISOString()}
+                        serverNowIso={nowIso}
+                        stopAtZero
+                        overrunLabel="ready"
+                        className="text-3xl font-bold tabular-nums"
+                      />
+                      {breakSlot && <Nudge slug={slug} slotId={breakSlot.id} timer="break" />}
                     </>
+                  ) : null}
+                  {v.clock.phase === "prestart" && (
+                    <ActionForm action={updateTournamentAction} hidden={{ slug }} submitLabel="Set start" variant="secondary" inline className="mt-2">
+                      <LocalDateTimeInput name="startsAt" iso={v.startsAt.toISOString()} className={inputCls} required />
+                    </ActionForm>
                   )}
                   <div className="mt-2">
                     <ActionForm action={startSlotAction} hidden={{ slug, slotId: v.next.id }} submitLabel="▶ Start round" inline />
@@ -296,4 +323,22 @@ function summarise(detail: unknown): string {
     .map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : String(v)}`)
     .join(" ")
     .slice(0, 140);
+}
+
+/** −1′ / +1′ on a live manual timer — lands on that round's own override. */
+function Nudge({ slug, slotId, timer }: { slug: string; slotId: string; timer: "game" | "break" }) {
+  return (
+    <div className="mt-1 flex gap-1">
+      {[-60, 60].map((d) => (
+        <ActionForm
+          key={d}
+          action={nudgeClockAction}
+          hidden={{ slug, slotId, timer, deltaSec: d }}
+          submitLabel={d < 0 ? "−1 min" : "+1 min"}
+          variant="secondary"
+          inline
+        />
+      ))}
+    </div>
+  );
 }

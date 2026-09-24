@@ -55,9 +55,7 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
       id: s.id,
       label: s.label,
       state,
-      caption: v.manualRounds ? (
-        `round ${s.index + 1}`
-      ) : (
+      caption: (
         <>
           {state === "running" ? "ends ~" : state === "done" ? "played ~" : "starts ~"}
           <LocalTime iso={at.toISOString()} withDate={!soon} />
@@ -65,14 +63,15 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
             <>
               {" · "}
               <Countdown
-                targetIso={at.toISOString()}
+                targetIso={(v.manualRounds && state === "running" && v.clock.phase === "game" ? v.clock.endsAt : at).toISOString()}
                 serverNowIso={nowIso}
                 className="font-medium"
-                overrunLabel={state === "running" ? "over" : "waiting"}
+                stopAtZero={v.manualRounds}
+                overrunLabel={state === "running" ? (v.manualRounds ? "" : "over") : "waiting"}
               />
             </>
           )}
-          {state !== "done" && s.projection.delaySec > 60 && (
+          {!v.manualRounds && state !== "done" && s.projection.delaySec > 60 && (
             <span className="ml-2 text-amber-600">{fmtDelay(s.projection.delaySec)}</span>
           )}
         </>
@@ -169,18 +168,12 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
             <span className={s.projection.state === "done" ? "text-zinc-500 line-through" : "font-medium"}>{s.label}</span>
           </div>
           <div className="tabular-nums text-zinc-500">
-            {v.manualRounds ? (
-              <span className="text-xs uppercase tracking-wide">round {s.index + 1}</span>
-            ) : (
-              <>
-                <LocalTime iso={s.projection.projectedStart.toISOString()} /> –{" "}
-                <LocalTime iso={s.projection.projectedEnd.toISOString()} />
-                {s.projection.state !== "done" && Math.abs(s.projection.delaySec) > 60 && (
-                  <span className={s.projection.delaySec > 0 ? "ml-2 text-amber-600" : "ml-2 text-emerald-600"}>
-                    {fmtDelay(s.projection.delaySec)}
-                  </span>
-                )}
-              </>
+            <LocalTime iso={s.projection.projectedStart.toISOString()} /> –{" "}
+            <LocalTime iso={s.projection.projectedEnd.toISOString()} />
+            {!v.manualRounds && s.projection.state !== "done" && Math.abs(s.projection.delaySec) > 60 && (
+              <span className={s.projection.delaySec > 0 ? "ml-2 text-amber-600" : "ml-2 text-emerald-600"}>
+                {fmtDelay(s.projection.delaySec)}
+              </span>
             )}
           </div>
         </li>
@@ -208,7 +201,7 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
                   : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900",
               ].join(" ")}
             >
-              <TeamIcon theme={v.theme} icon={t.icon} />
+              <TeamIcon theme={v.theme} icon={t.icon} withLabel />
               {t.name}
               {t.status === "PENDING" && (
                 <span className="text-amber-500" title="awaiting confirmation">
