@@ -88,6 +88,11 @@ model Tournament {
   /// Look and vocabulary — see src/lib/themes.ts. A plain string rather than
   /// an enum so adding a theme stays a code change, not a migration.
   theme String @default("basic")
+  /// Per-emblem artwork the organiser supplies: { iconId: "https://…" }.
+  /// Overrides the drawn emblem. Like venueImageUrl these are never fetched
+  /// server-side — the viewer's browser loads them, and whoever sets one is
+  /// the one deciding they may use that image.
+  iconArt Json?
 
   // Roster. maxTeamSize 1 makes it a singles tournament and the UI says
   // "player" rather than "team".

@@ -225,7 +225,7 @@ export default function BoardSettings({
             <input
               type="range"
               min={0}
-              max={5}
+              max={10}
               step={1}
               value={inset}
               onChange={(e) => {

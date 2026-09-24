@@ -254,7 +254,7 @@ The whole surface is the query string — one screen, one URL, no saved state:
 | `look` | `midnight` · `slate` · `dusk` · `forest` · `ember` · `paper` · `daylight` · `tuermli` · `contrast` | `midnight` |
 | `contrast` | `high` — the older spelling of `look=contrast`; `look` wins | — |
 | `scale` | `0.8`–`1.4` type scale | `1` |
-| `inset` | `0`–`5` (% safe area, for beamers that crop edges) | `0` |
+| `inset` | `0`–`10` (% safe area per axis, for beamers that crop edges) | `0` |
 | `msg` | free text in the band | — |
 
 Two projectors can therefore show different things from one tournament: the

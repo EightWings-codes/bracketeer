@@ -141,7 +141,11 @@ export default function BoardShell({
     <div
       ref={root}
       data-look={cfg.look}
-      style={{ "--bs0": cfg.scale, padding: `${cfg.inset}%` } as React.CSSProperties}
+      // Per axis on purpose: a CSS percentage padding resolves against the
+      // container's *width* on all four sides, so `5%` put ~9% of the height
+      // above and below on a 16:9 screen. A safe area has to be the same
+      // fraction of the edge it protects.
+      style={{ "--bs0": cfg.scale, padding: `${cfg.inset}vh ${cfg.inset}vw` } as React.CSSProperties}
       className={`board fixed inset-0 flex flex-col overflow-hidden ${idle && !settings ? "board-idle" : ""}`}
     >
       {band}

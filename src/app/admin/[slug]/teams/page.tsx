@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import StatusBadge from "@/components/StatusBadge";
 import TeamIcon from "@/components/TeamIcon";
-import { findTheme } from "@/lib/themes";
+import { findTheme, parseIconArt } from "@/lib/themes";
 import ActionForm from "@/components/ActionForm";
 import { inputCls } from "@/components/ui";
 import { addTeamAction, deleteTeamAction, setStatusAction, teamStatusAction, updateTeamAction } from "../actions";
@@ -15,6 +15,7 @@ export default async function TeamsPage({ params }: { params: Promise<{ slug: st
     include: { teams: { orderBy: [{ status: "asc" }, { createdAt: "asc" }], include: { group: true } } },
   });
   if (!t) notFound();
+  const art = parseIconArt(t.theme, t.iconArt);
   const counts = { PENDING: 0, CONFIRMED: 0, REJECTED: 0 };
   for (const team of t.teams) counts[team.status]++;
 
@@ -51,7 +52,7 @@ export default async function TeamsPage({ params }: { params: Promise<{ slug: st
               <tr key={team.id} className="align-top">
                 <td colSpan={5} className="p-2">
                   <ActionForm action={updateTeamAction} hidden={{ slug, teamId: team.id }} submitLabel="Save" variant="ghost" inline>
-                    <TeamIcon theme={t.theme} icon={team.icon} size="md" withLabel className="mb-0.5" />
+                    <TeamIcon theme={t.theme} icon={team.icon} art={art} size="md" withLabel className="mb-0.5" />
                     <input name="name" defaultValue={team.name} className={`${inputCls} w-40`} />
                     <input name="members" defaultValue={team.members.join(", ")} placeholder="players" className={`${inputCls} w-48`} />
                     <input name="contact" defaultValue={team.contact ?? ""} placeholder="contact" className={`${inputCls} w-32`} />

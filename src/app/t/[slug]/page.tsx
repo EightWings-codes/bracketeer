@@ -82,7 +82,15 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {ms.map((m) => (
-              <LiveMatch key={m.id} m={m} tableLabel={v.tableLabel(m.tableNo)} highlightId={me?.id}>
+              <LiveMatch
+                key={m.id}
+                m={m}
+                tableLabel={v.tableLabel(m.tableNo)}
+                highlightId={me?.id}
+                theme={v.theme}
+                art={v.iconArt}
+                iconFor={(id) => (id ? v.teamIcon.get(id) ?? null : null)}
+              >
                 {state === "running" && v.openScoring && m.status !== "CONFIRMED" && m.teamAId && m.teamBId && (
                   <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
                     <ScoreForm
@@ -201,7 +209,7 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
                   : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900",
               ].join(" ")}
             >
-              <TeamIcon theme={v.theme} icon={t.icon} withLabel />
+              <TeamIcon theme={v.theme} icon={t.icon} art={v.iconArt} withLabel />
               {t.name}
               {t.status === "PENDING" && (
                 <span className="text-amber-500" title="awaiting confirmation">

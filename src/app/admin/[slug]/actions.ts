@@ -104,6 +104,17 @@ export const updateTournamentAction = action(async (fd, adminId) => {
   s("description");
   s("scoreLabel");
   s("theme");
+  // Emblem artwork arrives as iconArt.<iconId> fields; store the lot, and let
+  // parseIconArt drop anything that is not an http(s) url for a real emblem.
+  const artEntries = [...fd.entries()].filter(([k]) => k.startsWith("iconArt."));
+  if (artEntries.length > 0) {
+    const art: Record<string, string> = {};
+    for (const [k, v] of artEntries) {
+      const url = String(v ?? "").trim();
+      if (url) art[k.slice("iconArt.".length)] = url;
+    }
+    patch.iconArt = art;
+  }
   const newSlug = str(fd, "newSlug");
   if (newSlug) patch.slug = newSlug;
   const startsAt = date(fd, "startsAt");

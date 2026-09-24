@@ -70,7 +70,7 @@ function Groups({ v, compact }: { v: TournamentView; compact: boolean }) {
                     <td className="board-dim py-[0.35vh] tabular-nums">{r.rank}</td>
                     <td className="py-[0.35vh]">
                       <span className="flex items-center gap-[0.8vh]">
-                        <TeamIcon theme={v.theme} icon={v.teamIcon.get(r.id) ?? null} size="xl" />
+                        <TeamIcon theme={v.theme} icon={v.teamIcon.get(r.id) ?? null} art={v.iconArt} size="xl" />
                         <span className="truncate font-semibold">{r.name}</span>
                       </span>
                     </td>
@@ -165,7 +165,7 @@ function Cell({ m, v, live, compact }: { m: ViewMatch; v: TournamentView; live: 
   const line = (label: string, id: string | null, score: number | null, won: boolean) => (
     <div className="flex items-center justify-between gap-[1vh] px-[1.2vh] py-[0.6vh]">
       <span className="flex min-w-0 items-center gap-[0.8vh]">
-        {id && <TeamIcon theme={v.theme} icon={v.teamIcon.get(id) ?? null} size="xl" />}
+        {id && <TeamIcon theme={v.theme} icon={v.teamIcon.get(id) ?? null} art={v.iconArt} size="xl" />}
         <span className={`truncate ${!id ? "board-dim italic" : won ? "font-bold" : settled ? "board-dim" : ""}`}>
           {label}
         </span>
@@ -198,7 +198,7 @@ function Roster({ v, compact }: { v: TournamentView; compact: boolean }) {
       <ul className="flex flex-wrap content-start gap-[1.2vh]">
         {shown.map((t) => (
           <li key={t.id} className="board-panel flex items-center gap-[1vh] px-[1.5vh] py-[0.8vh]">
-            <TeamIcon theme={v.theme} icon={t.icon} size="xl" />
+            <TeamIcon theme={v.theme} icon={t.icon} art={v.iconArt} size="xl" />
             <span className={`${compact ? "t-xs" : "t-sm"} font-semibold`}>{t.name}</span>
           </li>
         ))}

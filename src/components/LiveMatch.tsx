@@ -13,6 +13,7 @@ export default function LiveMatch({
   tableLabel,
   highlightId,
   theme,
+  art,
   iconFor,
   children,
 }: {
@@ -20,6 +21,8 @@ export default function LiveMatch({
   tableLabel: string;
   highlightId?: string | null;
   theme?: string;
+  /** Organiser-supplied artwork per emblem id. */
+  art?: Record<string, string>;
   /** Team id → emblem id. */
   iconFor?: (teamId: string | null) => string | null;
   children?: React.ReactNode;
@@ -30,7 +33,7 @@ export default function LiveMatch({
   const side = (name: string, id: string | null, score: number | null, won: boolean) => (
     <div className="flex items-baseline justify-between gap-3">
       {theme && iconFor?.(id) && (
-        <TeamIcon theme={theme} icon={iconFor(id)} size="md" className="self-center" />
+        <TeamIcon theme={theme} icon={iconFor(id)} art={art} size="md" className="self-center" />
       )}
       <span
         className={[

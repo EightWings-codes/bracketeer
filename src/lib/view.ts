@@ -5,7 +5,7 @@
 import { prisma } from "./prisma";
 import { computeStandings, type StandingRow } from "./standings";
 import { formatOf, projectionByIndex, slotInputs } from "./tournament";
-import { findTheme, tableLabel as themeTableLabel } from "./themes";
+import { findTheme, parseIconArt, tableLabel as themeTableLabel } from "./themes";
 import { roundClock, type SlotProjection } from "./schedule";
 import { ordinal } from "./text";
 
@@ -101,6 +101,8 @@ export async function loadTournamentView(slug: string, now = new Date()) {
     /** Team id → ThemeIcon id, for <TeamIcon>. */
     teamIcon,
     themeConfig: findTheme(t.theme),
+    /** Organiser-supplied emblem artwork, validated. */
+    iconArt: parseIconArt(t.theme, t.iconArt),
     tableLabel: (n: number) => themeTableLabel(findTheme(t.theme), t.tableLabels, n),
   };
 }

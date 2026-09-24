@@ -159,7 +159,7 @@ function MatchCard({
   const side = (label: string, id: string | null, score: number | null, won: boolean) => (
     <div className="flex items-center justify-between gap-[1.5vh]">
       <div className="flex min-w-0 items-center gap-[1.2vh]">
-        {id && <TeamIcon theme={v.theme} icon={v.teamIcon.get(id) ?? null} size={compact ? "xl" : "2xl"} />}
+        {id && <TeamIcon theme={v.theme} icon={v.teamIcon.get(id) ?? null} art={v.iconArt} size={compact ? "xl" : "2xl"} />}
         <span
           className={[
             size,
@@ -243,7 +243,7 @@ function Poster({ v, compact }: { v: TournamentView; compact: boolean }) {
                 style={{ animationDelay: `${Math.min(i, 16) * 40}ms` }}
                 className="board-panel pop-in flex items-center gap-[1vh] px-[1.5vh] py-[0.8vh]"
               >
-                <TeamIcon theme={v.theme} icon={t.icon} size={compact ? "xl" : "2xl"} />
+                <TeamIcon theme={v.theme} icon={t.icon} art={v.iconArt} size={compact ? "xl" : "2xl"} />
                 <span className={`${compact ? "t-xs" : "t-sm"} font-semibold`}>{t.name}</span>
                 {t.status === "PENDING" && (
                   <span className="board-warn" title="awaiting confirmation" aria-hidden="true">

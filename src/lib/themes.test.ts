@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_THEME, findIcon, findTheme, isValidIcon, pickIcon, tableLabel, THEMES } from "./themes";
+import {
+  DEFAULT_THEME,
+  findIcon,
+  findTheme,
+  iconArtwork,
+  isValidIcon,
+  parseIconArt,
+  pickIcon,
+  tableLabel,
+  THEMES,
+} from "./themes";
 
 describe("themes", () => {
   it("ships the three themes with unique ids and non-empty icon sets", () => {
@@ -65,5 +75,77 @@ describe("emblem assignment", () => {
     expect(pickIcon("toeggele", null, used, () => 0.99)).toBe(all[all.length - 1]);
     // Once every emblem is taken it has to repeat rather than fail.
     expect(isValidIcon("toeggele", pickIcon("toeggele", null, all, () => 0.99))).toBe(true);
+  });
+});
+
+describe("organiser-supplied emblem artwork", () => {
+  it("keeps http(s) urls for emblems the theme has", () => {
+    const art = parseIconArt("beerpong", {
+      calanda: "https://example.test/calanda.png",
+      eichhof: " http://example.test/eichhof.svg ",
+    });
+    expect(art).toEqual({
+      calanda: "https://example.test/calanda.png",
+      eichhof: "http://example.test/eichhof.svg",
+    });
+  });
+
+  it("drops anything that could not be a safe image source", () => {
+    const art = parseIconArt("beerpong", {
+      calanda: "javascript:alert(1)",
+      eichhof: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+      falken: "/local/path.png",
+      boxer: "",
+      cardinal: 42,
+      // Not an emblem of this theme at all.
+      rot: "https://example.test/rot.png",
+    });
+    expect(art).toEqual({});
+  });
+
+  it("survives junk where an object was expected", () => {
+    expect(parseIconArt("beerpong", null)).toEqual({});
+    expect(parseIconArt("beerpong", "nope")).toEqual({});
+    expect(parseIconArt("beerpong", ["https://example.test/a.png"])).toEqual({});
+  });
+
+  it("prefers the organiser's artwork, then ours, then nothing", () => {
+    const calanda = findIcon("beerpong", "calanda")!;
+    expect(iconArtwork(calanda, { calanda: "https://example.test/x.png" })).toBe("https://example.test/x.png");
+    // Falls back to the emblem shipped with the theme. The file format is not
+    // the point here, so do not pin it — only that it is Calanda's own art.
+    expect(iconArtwork(calanda)).toMatch(/^\/emblems\/beerpong\/calanda\.\w+$/);
+    // Töggele ships no artwork, so it stays a coloured badge.
+    expect(iconArtwork(findIcon("toeggele", "rot"))).toBeNull();
+    expect(iconArtwork(null)).toBeNull();
+  });
+});
+
+describe("shipped emblem artwork", () => {
+  it("every beer pong emblem has a file that actually exists", async () => {
+    const { existsSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    for (const icon of findTheme("beerpong").icons) {
+      expect(icon.art, `${icon.id} has no artwork`).toBeTruthy();
+      expect(existsSync(join(process.cwd(), "public", icon.art!)), `missing ${icon.art}`).toBe(true);
+    }
+  });
+
+  it("has an emblem for every can image in the folder", async () => {
+    const { readdirSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const onDisk = readdirSync(join(process.cwd(), "public", "emblems", "beerpong"))
+      .filter((f) => f.endsWith(".jpg"))
+      .map((f) => f.replace(/\.jpg$/, ""))
+      .sort();
+    const wired = findTheme("beerpong").icons.map((i) => i.id).sort();
+    // Dropping a can in the folder and forgetting to wire it should fail here.
+    expect(wired).toEqual(onDisk);
+  });
+
+  it("leaves themes without artwork on their coloured badges", () => {
+    for (const id of ["basic", "toeggele"]) {
+      expect(findTheme(id).icons.every((i) => !i.art)).toBe(true);
+    }
   });
 });

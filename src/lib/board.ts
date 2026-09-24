@@ -166,7 +166,7 @@ export function parseBoardConfig(
     standings: standings === "groups" || standings === "bracket" ? standings : "auto",
     look: findLook(look ?? (contrast === "high" ? "contrast" : DEFAULT_LOOK.id)).id,
     scale: Number.isFinite(scale) ? clamp(scale, 0.8, 1.4) : 1,
-    inset: Number.isFinite(inset) ? clamp(inset, 0, 5) : 0,
+    inset: Number.isFinite(inset) ? clamp(inset, 0, 10) : 0,
     msg: msg ? msg.slice(0, 120) : null,
   };
 }

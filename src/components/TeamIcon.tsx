@@ -1,4 +1,4 @@
-import { findIcon, findTheme, iconLabelIsMeaningful } from "@/lib/themes";
+import { findIcon, findTheme, iconArtwork, iconLabelIsMeaningful } from "@/lib/themes";
 
 /**
  * A team's emblem. Where the label carries the meaning — a brewery, say — the
@@ -11,10 +11,13 @@ export default function TeamIcon({
   icon,
   size = "sm",
   withLabel = false,
+  art = {},
   className = "",
 }: {
   theme: string;
   icon: string | null;
+  /** Organiser-supplied artwork per emblem id; wins over the drawn one. */
+  art?: Record<string, string>;
   /** `xl` and `2xl` are sized in vh, for the projector board. */
   size?: "sm" | "md" | "lg" | "xl" | "2xl";
   /** Show the emblem's name when the theme's names mean something. */
@@ -23,6 +26,7 @@ export default function TeamIcon({
 }) {
   const found = findIcon(theme, icon);
   if (!found) return null;
+  const artwork = iconArtwork(found, art);
   const box = {
     sm: "h-5 w-5 text-[10px]",
     md: "h-7 w-7 text-xs",
@@ -34,10 +38,10 @@ export default function TeamIcon({
   const shell = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold leading-none ${box} ${withLabel ? "" : className}`;
 
   // Drawn artwork where a theme has it; the coloured monogram otherwise.
-  const badge = found.art ? (
+  const badge = artwork ? (
     <span title={found.label} className={shell}>
       {/* eslint-disable-next-line @next/next/no-img-element -- a static, already-sized SVG */}
-      <img src={found.art} alt="" aria-hidden="true" className="h-full w-full" />
+      <img src={artwork} alt="" aria-hidden="true" className="h-full w-full object-cover" />
       <span className="sr-only">{found.label}</span>
     </span>
   ) : (

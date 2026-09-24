@@ -86,7 +86,9 @@ describe("parseBoardConfig", () => {
     expect(cfg({ scale: "3" }).scale).toBe(1.4);
     expect(cfg({ scale: "0.1" }).scale).toBe(0.8);
     expect(cfg({ scale: "huge" }).scale).toBe(1);
-    expect(cfg({ inset: "9" }).inset).toBe(5);
+    expect(cfg({ inset: "9" }).inset).toBe(9);
+    expect(cfg({ inset: "20" }).inset).toBe(10);
+    expect(cfg({ inset: "-2" }).inset).toBe(0);
   });
 
   it("picks a look, and keeps the old contrast flag working", () => {

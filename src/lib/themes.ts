@@ -7,10 +7,11 @@
  * identical everywhere. It sets vocabulary, colour, the icon set teams pick
  * their emblem from, and which flourish the registration phase plays.
  *
- * On the beer names: these are labels players recognise, drawn as a monogram
- * on a solid colour of our own choosing, with the brewery's name shown beside
- * it wherever there is room. No brewery's logo, wordmark or artwork is
- * reproduced, and nothing here implies any of them are involved.
+ * On the beer emblems: the artwork under /public/emblems/beerpong is product
+ * photography of the cans, supplied by the organiser who runs this instance.
+ * Whoever deploys it is the one asserting they may use those images; the
+ * monogram and colour on each entry remain the fallback if the file is gone.
+ * Nothing here implies any brewery is involved in this tournament.
  */
 
 export interface ThemeIcon {
@@ -78,13 +79,13 @@ export interface Theme {
 
 const neutral = (id: string, label: string, mark: string, tone: string): ThemeIcon => ({ id, label, mark, tone });
 
-/** Beer pong emblems ship with drawn artwork; the rest are glyphs. */
+/** Beer pong emblems carry a can image; other themes are coloured glyphs. */
 const brewed = (id: string, label: string, mark: string, tone: string): ThemeIcon => ({
   id,
   label,
   mark,
   tone,
-  art: `/emblems/beerpong/${id}.svg`,
+  art: `/emblems/beerpong/${id}.jpg`,
 });
 
 export const THEMES: Theme[] = [
@@ -112,7 +113,7 @@ export const THEMES: Theme[] = [
   {
     id: "beerpong",
     label: "Beer pong",
-    blurb: "Cups, tables and a Swiss brewery to play under.",
+    blurb: "Cups, tables and a beer to play under.",
     emblem: "🍺",
     accent: "text-amber-600 dark:text-amber-400",
     iconLabel: "Your brewery",
@@ -120,18 +121,26 @@ export const THEMES: Theme[] = [
     defaults: { scoreLabel: "Cups", allowDraws: false },
     tableWord: "Table",
     icons: [
-      brewed("feldschloesschen", "Feldschlösschen", "FS", "bg-red-700 text-white"),
-      brewed("calanda", "Calanda", "CA", "bg-blue-700 text-white"),
-      brewed("quoellfrisch", "Quöllfrisch", "QF", "bg-lime-600 text-white"),
-      brewed("cardinal", "Cardinal", "CD", "bg-rose-700 text-white"),
-      brewed("eichhof", "Eichhof", "EH", "bg-amber-600 text-white"),
-      brewed("schuetzengarten", "Schützengarten", "SG", "bg-emerald-700 text-white"),
-      brewed("rugenbraeu", "Rugenbräu", "RB", "bg-indigo-700 text-white"),
-      brewed("falken", "Falken", "FK", "bg-orange-600 text-white"),
-      brewed("valaisanne", "Valaisanne", "VL", "bg-yellow-400 text-yellow-950"),
-      brewed("chopfab", "Chopfab", "CF", "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"),
-      brewed("monstein", "Monstein", "MO", "bg-teal-600 text-white"),
-      brewed("boxer", "Boxer", "BX", "bg-violet-700 text-white"),
+      brewed("adler-braeu", "Adler Bräu", "AB", "bg-red-700 text-white"),
+      brewed("appenzeller-brandloescher", "Appenzeller Brandlöscher", "AP", "bg-blue-700 text-white"),
+      brewed("baarer-bier", "Baarer Bier", "BB", "bg-lime-600 text-white"),
+      brewed("boxer", "Boxer", "BX", "bg-rose-700 text-white"),
+      brewed("calanda", "Calanda", "CA", "bg-amber-600 text-white"),
+      brewed("cardinal", "Cardinal", "CD", "bg-emerald-700 text-white"),
+      brewed("carlsberg", "Carlsberg", "CB", "bg-indigo-700 text-white"),
+      brewed("chopfab", "Chopfab", "CF", "bg-orange-600 text-white"),
+      brewed("eichhof", "Eichhof", "EH", "bg-yellow-500 text-yellow-950"),
+      brewed("einsiedler", "Einsiedler", "EI", "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"),
+      brewed("falken", "Falken", "FK", "bg-teal-600 text-white"),
+      brewed("feldschloesschen", "Feldschlösschen", "FS", "bg-violet-700 text-white"),
+      brewed("heineken", "Heineken", "HK", "bg-sky-800 text-white"),
+      brewed("huerlimann", "Hürlimann", "HU", "bg-green-700 text-white"),
+      brewed("ittinger", "Ittinger", "IT", "bg-fuchsia-700 text-white"),
+      brewed("quoellfrisch", "Quöllfrisch", "QF", "bg-cyan-700 text-white"),
+      brewed("rugenbraeu", "Rugenbräu", "RB", "bg-stone-700 text-white"),
+      brewed("schuetzengarten", "Schützengarten", "SG", "bg-pink-700 text-white"),
+      brewed("sonnenbraeu", "Sonnenbräu", "SB", "bg-purple-800 text-white"),
+      brewed("unser-bier", "Unser Bier", "UB", "bg-slate-700 text-white"),
     ],
   },
   {
@@ -168,6 +177,34 @@ export function findTheme(id: string | null | undefined): Theme {
 export function findIcon(themeId: string | null | undefined, iconId: string | null | undefined): ThemeIcon | null {
   if (!iconId) return null;
   return findTheme(themeId).icons.find((i) => i.id === iconId) ?? null;
+}
+
+/**
+ * Artwork the organiser supplied per emblem, as { iconId: url }.
+ *
+ * Only http(s) survives, and only for emblems the theme actually has, so a
+ * stored value cannot turn into a javascript: or data: URL in an <img src>.
+ * Nothing here is fetched server-side: the viewer's browser loads it, and the
+ * organiser who pasted it is the one deciding they may use that image.
+ */
+export function parseIconArt(themeId: string | null | undefined, raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const theme = findTheme(themeId);
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== "string") continue;
+    const url = value.trim();
+    if (!url || !/^https?:\/\//i.test(url)) continue;
+    if (!theme.icons.some((i) => i.id === key)) continue;
+    out[key] = url;
+  }
+  return out;
+}
+
+/** The image to draw for an emblem: the organiser's, ours, or none. */
+export function iconArtwork(icon: ThemeIcon | null, overrides: Record<string, string> = {}): string | null {
+  if (!icon) return null;
+  return overrides[icon.id] ?? icon.art ?? null;
 }
 
 /** A team's icon only makes sense inside its own theme; ids are not shared. */

@@ -4,7 +4,8 @@ import ActionForm from "@/components/ActionForm";
 import LocalDateTimeInput from "@/components/LocalDateTimeInput";
 import { inputCls } from "@/components/ui";
 import { describeSize, unitLower } from "@/lib/roster";
-import { THEMES } from "@/lib/themes";
+import { findTheme, parseIconArt, THEMES } from "@/lib/themes";
+import IconArtEditor from "@/components/IconArtEditor";
 import { deleteTournamentAction, resetPlanAction, updateTournamentAction } from "../actions";
 
 export default async function SettingsPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -50,6 +51,10 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
           <p className="self-end text-xs text-zinc-500">
             Changing the theme keeps every result. Emblems from the old theme stop showing until you switch back.
           </p>
+          <div className="sm:col-span-2">
+            <span className="block text-sm font-medium">Emblem artwork</span>
+            <IconArtEditor theme={findTheme(t.theme)} art={parseIconArt(t.theme, t.iconArt)} />
+          </div>
           <label className="text-sm">
             <span className="block font-medium">Tables</span>
             <input name="tableCount" type="number" min={1} defaultValue={t.tableCount} className={`${inputCls} w-full`} />
