@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { generatePlan, layoutFirstRound, seedOrder, snakeGroups, type TeamRef } from "./bracket";
+import { generatePlan, layoutFirstRound, packGroupStage, seedOrder, snakeGroups, type TeamRef } from "./bracket";
 import { findPreset, presetsFor } from "./formats";
+import { roundRobinRounds } from "./roundrobin";
 import { seededRng } from "./rng";
 import { resolveSources, type ResolvableMatch } from "./resolve";
 
@@ -46,13 +47,15 @@ describe("layoutFirstRound", () => {
 });
 
 describe("generatePlan", () => {
-  it("12 → 3×4 → QF on 4 tables: 18 group matches in 6 slots, QF/SF/Final + 3rd", () => {
+  it("12 → 3×4 → QF on 4 tables: 18 group matches in 5 slots, QF/SF/Final + 3rd", () => {
     const cfg = findPreset("g12-3x4-qf")!;
     const plan = generatePlan(cfg, teams(12), 4, seededRng(1));
     expect(plan.groups).toHaveLength(3);
     const groupMatches = plan.matches.filter((m) => m.groupKey);
     expect(groupMatches).toHaveLength(18);
-    expect(plan.slots.filter((s) => s.stage === "GROUP")).toHaveLength(6);
+    // 18 fixtures over 4 tables is 5 slots — the packer leaves no table idle
+    // until the very last one.
+    expect(plan.slots.filter((s) => s.stage === "GROUP")).toHaveLength(5);
     expect(plan.slots.filter((s) => s.stage === "QUARTER")).toHaveLength(1);
     expect(plan.slots.filter((s) => s.stage === "SEMI")).toHaveLength(1);
     expect(plan.slots.filter((s) => s.stage === "FINAL")).toHaveLength(1);
@@ -359,5 +362,65 @@ describe("double elimination", () => {
     expect(winnerOf.get(gf.key)).toBe("t1");
     // Runner-up came up through the losers bracket after losing to team 1.
     expect(loserOf.get(gf.key)).toBe("t2");
+  });
+});
+
+describe("packGroupStage", () => {
+  const groupFixtures = (key: string, size: number) =>
+    roundRobinRounds(size).flatMap((pairs, round) =>
+      pairs.map(([a, b]) => ({ groupKey: key, round, teamAId: `${key}${a}`, teamBId: `${key}${b}` })),
+    );
+
+  const field = (...groups: Array<[string, number]>) => groups.flatMap(([k, n]) => groupFixtures(k, n));
+
+  /** The invariants a packing must hold whatever the field and table count. */
+  const check = (all: ReturnType<typeof field>, tables: number) => {
+    const slots = packGroupStage(all, tables);
+    expect(slots.flat()).toHaveLength(all.length);
+    expect(new Set(slots.flat())).toEqual(new Set(all));
+
+    slots.forEach((slot, i) => {
+      expect(slot.length).toBeLessThanOrEqual(tables);
+      const sides = slot.flatMap((f) => [f.teamAId, f.teamBId]);
+      expect(new Set(sides).size).toBe(sides.length);
+
+      // A table is only ever left standing because every fixture still to come
+      // needs a team that is already playing in this slot.
+      if (slot.length < tables) {
+        const busy = new Set(sides);
+        for (const later of slots.slice(i + 1).flat()) {
+          expect(busy.has(later.teamAId) || busy.has(later.teamBId)).toBe(true);
+        }
+      }
+    });
+    return slots.map((s) => s.length);
+  };
+
+  it("keeps every table busy while fixtures remain", () => {
+    const two = field(["A", 4], ["B", 4]);
+    // Round-by-round chunking gave 3 + 1 on three tables; packing gives 3 + 3 + 3 + 3.
+    expect(check(two, 3)).toEqual([3, 3, 3, 3]);
+    expect(check(two, 2)).toEqual([2, 2, 2, 2, 2, 2]);
+    expect(check(two, 1)).toHaveLength(12);
+  });
+
+  it("reaches the fewest slots the tables allow", () => {
+    const three = field(["A", 4], ["B", 4], ["C", 4]);
+    expect(check(three, 4)).toEqual([4, 4, 4, 4, 2]); // 18 matches, 5 slots — the minimum
+    expect(check(three, 3)).toEqual([3, 3, 3, 3, 3, 3]);
+  });
+
+  it("packs uneven groups too", () => {
+    const nine = field(["A", 5], ["B", 4]); // 9 teams: 10 + 6 matches
+    expect(check(nine, 3)).toEqual([3, 3, 3, 3, 2, 2]); // 16 matches in ceil(16/3) slots
+    // A group of five can only ever play two matches at once, so its ten
+    // matches need five slots however many tables the hall has.
+    expect(check(nine, 4)).toHaveLength(5);
+  });
+
+  it("never asks a group for more matches than its teams allow", () => {
+    const two = field(["A", 4], ["B", 4]);
+    // Eight tables, eight teams: four matches at once is the ceiling.
+    expect(check(two, 8)).toEqual([4, 4, 4]);
   });
 });

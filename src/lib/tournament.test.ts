@@ -69,11 +69,14 @@ describe.skipIf(!RUN)("lock → generate → play → bracket advances (integrat
     await prisma.tournament.delete({ where: { id: other.id } });
   });
 
-  it("generates 3×4→QF: 6 group slots + QF/SF/Final, 22 matches", async () => {
+  it("generates 3×4→QF: 5 group slots + QF/SF/Final, 26 matches", async () => {
     await generateTournamentPlan(tid, "g12-3x4-qf", adminId, { seed: 7 });
     const v = (await loadTournamentView(SLUG))!;
     expect(v.groups).toHaveLength(3);
-    expect(v.slots).toHaveLength(9);
+    // 18 group matches over 4 tables pack into 5 slots, then QF, SF, and the
+    // final sharing its slot with the third-place match.
+    expect(v.slots).toHaveLength(8);
+    expect(v.slots.filter((s) => s.stage === "GROUP")).toHaveLength(5);
     expect(v.matches).toHaveLength(18 + 4 + 2 + 1 + 1);
     expect(v.matches.filter((m) => m.stage === "QUARTER").every((m) => !m.teamAId && !m.teamBId)).toBe(true);
   });

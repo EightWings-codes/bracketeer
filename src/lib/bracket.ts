@@ -304,6 +304,66 @@ export function doubleEliminationRounds(
   emit("Grand final", "GRAND_FINAL", [[wbAdvance[0]!, lbFeed[0]!]]);
 }
 
+export interface GroupFixture {
+  groupKey: string;
+  /** Its round in its own group's round robin — the preferred playing order. */
+  round: number;
+  teamAId: string;
+  teamBId: string;
+}
+
+/**
+ * Fill every table in every round.
+ *
+ * Playing group round 1 across the field and then group round 2 is the natural
+ * order, but it leaves tables standing idle whenever a round's fixtures do not
+ * divide by the table count — three tables and four fixtures means a round of
+ * three and a round of one. So fixtures are packed instead: a slot takes the
+ * earliest-round fixture whose two teams are not already playing in it, and
+ * when the current round runs out it pulls the next round of a group whose
+ * teams are free. Nothing but the last slot is ever short.
+ *
+ * Ties go to whoever has rested longest, so pulling a later round forward does
+ * not make one group play three slots in a row while another waits.
+ */
+export function packGroupStage(fixtures: GroupFixture[], tableCount: number): GroupFixture[][] {
+  const pending = [...fixtures];
+  const lastPlayed = new Map<string, number>();
+  const slots: GroupFixture[][] = [];
+
+  while (pending.length > 0) {
+    const busy = new Set<string>();
+    const slot: GroupFixture[] = [];
+    const slotIndex = slots.length;
+
+    while (slot.length < tableCount) {
+      let pick = -1;
+      let pickRound = Infinity;
+      let pickRest = Infinity;
+      for (let i = 0; i < pending.length; i++) {
+        const f = pending[i]!;
+        if (busy.has(f.teamAId) || busy.has(f.teamBId)) continue;
+        const rest = Math.min(lastPlayed.get(f.teamAId) ?? -1, lastPlayed.get(f.teamBId) ?? -1);
+        if (f.round < pickRound || (f.round === pickRound && rest < pickRest)) {
+          pick = i;
+          pickRound = f.round;
+          pickRest = rest;
+        }
+      }
+      if (pick < 0) break; // every remaining fixture needs a team already on a table
+      const [f] = pending.splice(pick, 1);
+      busy.add(f!.teamAId);
+      busy.add(f!.teamBId);
+      lastPlayed.set(f!.teamAId, slotIndex);
+      lastPlayed.set(f!.teamBId, slotIndex);
+      slot.push(f!);
+    }
+
+    slots.push(slot);
+  }
+  return slots;
+}
+
 export function generatePlan(
   config: FormatConfig,
   teams: TeamRef[],
@@ -338,33 +398,31 @@ export function generatePlan(
       });
     });
 
-    // Each group gets its own round robin: with uneven groups the bigger one
-    // simply has rounds the smaller one has already finished, and those later
-    // rounds are shorter rather than missing.
-    const perGroup = groupTeams.map((ts) => roundRobinRounds(ts.length));
-    const roundCount = Math.max(0, ...perGroup.map((r) => r.length));
-    for (let r = 0; r < roundCount; r++) {
-      // Round r of every group at once; no team appears twice in this set.
-      const roundMatches: Array<Omit<PlanMatch, "slotIndex" | "tableNo">> = [];
-      groups.forEach((g, gi) => {
-        const ts = groupTeams[gi]!;
-        for (const [a, b] of perGroup[gi]![r] ?? []) {
-          roundMatches.push({
-            key: `m${++matchNo}`,
-            groupKey: g.key,
-            sourceA: { kind: "TEAM", teamId: ts[a]!.id },
-            sourceB: { kind: "TEAM", teamId: ts[b]!.id },
-          });
+    // Each group gets its own round robin — with uneven groups the bigger one
+    // simply has rounds the smaller one has already finished — and the fixtures
+    // are then packed onto the tables by packGroupStage.
+    const fixtures: GroupFixture[] = [];
+    groupTeams.forEach((ts, gi) => {
+      roundRobinRounds(ts.length).forEach((pairs, r) => {
+        for (const [a, b] of pairs) {
+          fixtures.push({ groupKey: groups[gi]!.key, round: r, teamAId: ts[a]!.id, teamBId: ts[b]!.id });
         }
       });
-      if (roundMatches.length === 0) continue;
-      const parts = chunk(roundMatches, tableCount);
-      parts.forEach((part, pi) => {
-        const suffix = parts.length > 1 ? ` (${pi + 1}/${parts.length})` : "";
-        const si = pushSlot(`Group round ${r + 1}${suffix}`, "GROUP");
-        part.forEach((m, ti) => matches.push({ ...m, slotIndex: si, tableNo: ti + 1 }));
-      });
-    }
+    });
+
+    packGroupStage(fixtures, tableCount).forEach((slotFixtures, i) => {
+      const si = pushSlot(`Group round ${i + 1}`, "GROUP");
+      slotFixtures.forEach((f, ti) =>
+        matches.push({
+          key: `m${++matchNo}`,
+          slotIndex: si,
+          tableNo: ti + 1,
+          groupKey: f.groupKey,
+          sourceA: { kind: "TEAM", teamId: f.teamAId },
+          sourceB: { kind: "TEAM", teamId: f.teamBId },
+        }),
+      );
+    });
   }
 
   /** One knockout round → slots of `tableCount` matches. Returns match keys. */
