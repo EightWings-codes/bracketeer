@@ -132,6 +132,7 @@ export const THEMES: Theme[] = [
       brewed("eichhof", "Eichhof", "EH", "bg-yellow-500 text-yellow-950"),
       brewed("einsiedler", "Einsiedler", "EI", "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"),
       brewed("falken", "Falken", "FK", "bg-teal-600 text-white"),
+      brewed("farmer-bier", "Farmer Bier", "FB", "bg-lime-800 text-white"),
       brewed("feldschloesschen", "Feldschlösschen", "FS", "bg-violet-700 text-white"),
       brewed("heineken", "Heineken", "HK", "bg-sky-800 text-white"),
       brewed("huerlimann", "Hürlimann", "HU", "bg-green-700 text-white"),
